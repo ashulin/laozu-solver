@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
+import { DATA_VERSION } from '@/core/data/version'
+import ToastHost from '@/components/common/ToastHost.vue'
 
 const tabs = [
   { to: '/recognize', label: '截图识别' },
@@ -18,6 +20,7 @@ const tabs = [
         <line x1="3" y1="12" x2="21" y2="12" />
       </svg>
       <span class="title">我要当老祖 · 法宝摆盘</span>
+      <span class="ver muted small" :title="`法宝数据 ${DATA_VERSION.equips}，觉醒数据 ${DATA_VERSION.awaken}`">数据 {{ DATA_VERSION.equips }}</span>
     </div>
     <nav class="tabs">
       <RouterLink v-for="t in tabs" :key="t.to" :to="t.to" class="tab" active-class="on">{{ t.label }}</RouterLink>
@@ -26,6 +29,7 @@ const tabs = [
   <main class="app-main">
     <RouterView />
   </main>
+  <ToastHost />
 </template>
 
 <style scoped>
@@ -52,7 +56,7 @@ const tabs = [
 .tab.on { background: var(--gold-weak); color: var(--gold); }
 .app-main { max-width: 1440px; margin: 0 auto; padding: 16px; }
 @media (max-width: 640px) {
-  .title { display: none; }
+  .title, .ver { display: none; }
   .app-main { padding: 10px; }
 }
 </style>

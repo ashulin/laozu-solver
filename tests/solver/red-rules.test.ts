@@ -55,9 +55,9 @@ describe('checkRedEquips', () => {
     expect(w).toEqual([expect.stringContaining('1 星最多带 1 件')])
   })
 
-  it('觉醒超过上限', () => {
+  it('副本觉醒超过长老觉醒', () => {
     const w = checkRedEquips([{ equipId: swk.redEquipId, awakens: [3] }], configs, GAME)
-    expect(w).toEqual([expect.stringContaining('超过长老「孙悟空」的觉醒上限 2')])
+    expect(w).toEqual([expect.stringContaining('超过长老「孙悟空」的觉醒 2')])
   })
 
   it('长老未拥有', () => {

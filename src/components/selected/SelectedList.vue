@@ -58,7 +58,7 @@ function plus(equipId: number) {
               <option v-for="lv in r.cap + 1" :key="lv" :value="lv - 1">{{ lv === 1 ? '未觉醒' : `觉醒${lv - 1}` }}</option>
             </select>
           </label>
-          <span v-if="r.cap === 0" class="muted small">长老觉醒上限为 0，可在「长老管理」中调整</span>
+          <span v-if="r.cap === 0" class="muted small">长老觉醒为 0，可在「长老管理」中调整</span>
         </div>
       </li>
     </ul>

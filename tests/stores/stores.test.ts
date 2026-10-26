@@ -28,11 +28,24 @@ beforeEach(() => {
 })
 
 describe('elders store', () => {
-  it('未配置的长老默认未拥有、0 星、上限 0', () => {
-    expect(useEldersStore().config(swk.id)).toEqual({ elderId: swk.id, owned: false, star: 0, awakenCap: 0 })
+  it('默认账号：未配置的长老默认已拥有、0 星、觉醒 0', () => {
+    const s = useEldersStore()
+    expect(s.config(swk.id)).toEqual({ elderId: swk.id, owned: true, star: 0, awakenCap: 0 })
+    expect(s.ownedCount).toBe(GAME.elders.length)
+    expect(s.configMap[swk.id].owned).toBe(true)
   })
 
-  it('星级与觉醒上限被截断到合法范围', () => {
+  it('取消拥有后持久化，新会话仍为未拥有（不会回到默认）', () => {
+    const stop = enableAutoPersist()
+    useEldersStore().setOwned(swk.id, false)
+    stop()
+    setActivePinia(createPinia())
+    expect(useEldersStore().config(swk.id).owned).toBe(false)
+    expect(useEldersStore().config(ce.id).owned).toBe(true)
+    expect(useEldersStore().ownedCount).toBe(GAME.elders.length - 1)
+  })
+
+  it('星级与觉醒被截断到合法范围', () => {
     const s = useEldersStore()
     s.setStar(swk.id, 9)
     s.setAwakenCap(swk.id, 9)
@@ -52,7 +65,7 @@ describe('elders store', () => {
     expect(v().redEquip.name).toBe('如意金箍棒')
   })
 
-  it('下调觉醒上限时，已选副本被压到新上限', () => {
+  it('下调长老觉醒时，已选副本被压到新等级', () => {
     const e = useEldersStore()
     const bag = useBagStore()
     e.update(swk.id, { owned: true, star: 3, awakenCap: 4 })
@@ -76,6 +89,7 @@ describe('bag store', () => {
   it('红装：未拥有拒绝；新副本觉醒默认取上限；超出可携带数量拒绝', () => {
     const bag = useBagStore()
     const e = useEldersStore()
+    e.setOwned(swk.id, false)
     expect(bag.add(JGB)).toMatchObject({ ok: false, reason: expect.stringContaining('标记为已拥有') })
     e.update(swk.id, { owned: true, star: 2, awakenCap: 3 })
     expect(bag.add(JGB)).toEqual({ ok: true })

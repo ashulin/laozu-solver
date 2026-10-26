@@ -4,7 +4,7 @@
 
 - 计算内核：沿用 [Eleven-tz/laozu-solver-juexing](https://github.com/Eleven-tz/laozu-solver-juexing)（觉醒版）的退火求解与觉醒计分，并修正为「每份红装独立觉醒」
 - 交互设计：参考 [fradwow/laozu-solver](https://github.com/fradwow/laozu-solver)（原版）的实时摆盘、四视图与全自动截图识别
-- 新增：账号级长老管理（拥有/星级/觉醒上限）、法宝目录多维筛选（元素/形态/占格数/品阶）
+- 新增：账号级长老管理（默认账号默认拥有全部长老；拥有/星级/觉醒；按品级/元素/形态筛选）、法宝目录多维筛选（元素/形态/占格数/品阶）
 
 法宝数据库、形状库、颜色签名与退火算法来自原版作者 fradwow；觉醒数据来自觉醒版作者 Eleven-tz。感谢两位作者。
 

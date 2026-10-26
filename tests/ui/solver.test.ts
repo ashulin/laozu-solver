@@ -129,6 +129,7 @@ describe('EquipCatalog', () => {
   })
 
   it('搜长老名找到红装；未拥有时置灰且添加被拒绝', async () => {
+    useEldersStore().setOwned(swk.id, false)
     useSettingsStore().catalogFilters.keyword = '孙悟空'
     const w = mount(EquipCatalog)
     const items = w.findAll('.item')

@@ -5,7 +5,7 @@ import { describeAwakenLevels } from '@/core/awaken-text'
 import { A_ATK, A_DEF, A_HP } from '@/core/solver/constants'
 import { effBase, starBonusOf } from '@/core/solver/eff-base'
 import { maxRedCopies } from '@/core/solver/red-rules'
-import { ELEMENT_NAME, FORM_NAME } from '@/core/types'
+import { ELDER_QUALITY_NAME, ELEMENT_NAME, FORM_NAME } from '@/core/types'
 import { useEldersStore, type ElderView } from '@/stores/elders'
 import ShapePreview from '@/components/common/ShapePreview.vue'
 import Stepper from '@/components/common/Stepper.vue'
@@ -40,6 +40,7 @@ const fmt = (n: number) => n.toLocaleString('zh-CN')
         <input v-model="owned" type="checkbox" :aria-label="`拥有${view.elder.name}`" />
         <span class="name">{{ view.elder.name }}</span>
       </label>
+      <span class="quality">{{ ELDER_QUALITY_NAME[view.elder.quality] }}</span>
       <span class="equip">
         <ShapePreview :shape="shape" :tier="5" :size="6" />
         <span>{{ eq.name }}</span>
@@ -53,9 +54,10 @@ const fmt = (n: number) => n.toLocaleString('zh-CN')
       <span class="muted small">{{ bonus ? `基础三围 +${bonus}%` : '无星级加成' }} · 可带 {{ maxCopies }} 件</span>
     </div>
     <div class="row ctrl">
-      <span class="lab">觉醒上限</span>
+      <span class="lab">觉醒</span>
       <template v-if="view.awaken">
-        <Stepper v-model="cap" :max="view.maxCap" label="觉醒上限" />
+        <Stepper v-model="cap" :max="view.maxCap" label="觉醒" />
+        <span class="muted small">红装最多可觉醒 {{ cfg.awakenCap }} 级</span>
         <button type="button" class="ghost small" @click="open = !open">{{ open ? '收起效果' : '查看效果' }}</button>
       </template>
       <span v-else class="danger small">觉醒数据缺失，按无觉醒计算</span>
@@ -90,6 +92,7 @@ const fmt = (n: number) => n.toLocaleString('zh-CN')
 .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .own { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .name { color: var(--q); font-weight: 700; font-size: 15px; }
+.quality { font-size: 11px; color: var(--q); border: 1px solid var(--q); border-radius: 4px; padding: 0 4px; line-height: 16px; }
 .equip { display: inline-flex; align-items: center; gap: 6px; }
 .ctrl { gap: 10px; }
 .lab { width: 56px; color: var(--text-dim); font-size: 12px; }

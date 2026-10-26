@@ -19,6 +19,11 @@ export const ELEMENT_NAME: Record<ElementId, string> = { 1: '金', 2: '木', 3: 
 export const FORM_NAME: Record<WeaponForm, string> = { 0: '其他', 2: '剑', 3: '乐', 4: '异', 5: '御', 6: '枪', 7: '刀', 8: '锤', 9: '幡' }
 export const TIER_NAME: Record<Tier, string> = { 1: '一阶', 2: '二阶', 3: '三阶', 4: '四阶', 5: '五阶' }
 
+/** 长老品级（游戏内术语）：4 优品 / 3 良品 / 2 凡品 */
+export type ElderQuality = 2 | 3 | 4
+export const ELDER_QUALITIES: readonly ElderQuality[] = [4, 3, 2]
+export const ELDER_QUALITY_NAME: Record<ElderQuality, string> = { 4: '优品', 3: '良品', 2: '凡品' }
+
 export const ROWS = 6
 export const COLS = 7
 
@@ -93,16 +98,16 @@ export type AwakenDB = Record<number, AwakenEntry> // key: equipId；无条目 =
 export interface Elder {
   id: number
   name: string
-  quality: 2 | 3 | 4 // 2蓝 3紫 4黄
+  quality: ElderQuality // 品级：4优品 3良品 2凡品
   redEquipId: number
   starBonus: [number, number][] // [星级阈值, 基础三围加成 /10000]
 }
 
 export interface ElderConfig {
   elderId: number
-  owned: boolean
+  owned: boolean // 默认账号默认拥有全部长老
   star: number // 0~5
-  awakenCap: number // 0~maxLevel，绑定红装可觉醒到的上限
+  awakenCap: number // 长老觉醒等级 0~maxLevel；即绑定红装每份副本可觉醒到的上限（字段名沿用，兼容已有存储与备份）
 }
 
 /* ================================================================

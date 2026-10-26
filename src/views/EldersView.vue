@@ -1,28 +1,29 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useEldersStore } from '@/stores/elders'
+import { GAME } from '@/core/data'
+import { emptyElderFilter, matchElder, type ElderFilter } from '@/core/elder-filter'
+import { DEFAULT_ACCOUNT_NAME, useEldersStore } from '@/stores/elders'
 import ElderCard from '@/components/elders/ElderCard.vue'
-import ElderFilterBar, { type ElderFilter } from '@/components/elders/ElderFilterBar.vue'
+import ElderFilterBar from '@/components/elders/ElderFilterBar.vue'
 import BackupPanel from '@/components/elders/BackupPanel.vue'
 
 const elders = useEldersStore()
-const filter = ref<ElderFilter>({ keyword: '', qualities: [], ownedOnly: false })
+const filter = ref<ElderFilter>(emptyElderFilter())
 
-const list = computed(() => {
-  const kw = filter.value.keyword.trim()
-  return elders.views
-    .filter((v) => (!filter.value.qualities.length || filter.value.qualities.includes(v.elder.quality))
-      && (!filter.value.ownedOnly || v.config.owned)
-      && (!kw || v.elder.name.includes(kw) || v.redEquip.name.includes(kw)))
-    .sort((a, b) => Number(b.config.owned) - Number(a.config.owned) || b.elder.quality - a.elder.quality || a.redEquip.element - b.redEquip.element)
-})
+const list = computed(() => elders.views
+  .filter((v) => matchElder(GAME, v.elder, v.config, filter.value))
+  .sort((a, b) => Number(b.config.owned) - Number(a.config.owned) || b.elder.quality - a.elder.quality || a.redEquip.element - b.redEquip.element))
 </script>
 
 <template>
   <div class="elders-page">
     <section class="panel">
-      <h2>长老管理 <span class="muted small">账号级配置：星级决定红装三围与可携带数量，觉醒上限决定红装最多觉醒到几级</span></h2>
-      <ElderFilterBar v-model="filter" :total="elders.views.length" :shown="list.length" :owned="elders.ownedCount" />
+      <h2>
+        长老管理
+        <span class="account" title="目前只有一个账号，暂不支持切换">账号：{{ DEFAULT_ACCOUNT_NAME }}</span>
+        <span class="muted small">星级决定红装三围与可携带数量，觉醒决定红装最多可觉醒到几级</span>
+      </h2>
+      <ElderFilterBar v-model="filter" :views="elders.views" :shown="list.length" :owned="elders.ownedCount" />
     </section>
     <div class="grid">
       <ElderCard v-for="v in list" :key="v.elder.id" :view="v" />
@@ -35,4 +36,5 @@ const list = computed(() => {
 <style scoped>
 .elders-page { display: flex; flex-direction: column; gap: 12px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+.account { font-size: 12px; font-weight: 400; color: var(--gold); border: 1px solid var(--gold); border-radius: 10px; padding: 0 8px; margin: 0 6px; }
 </style>

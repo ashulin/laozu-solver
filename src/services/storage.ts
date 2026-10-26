@@ -1,12 +1,12 @@
 /**
- * 本地存储：localStorage 封装（带 schema 版本信封）、备份导入导出、觉醒版数据迁移。
+ * 本地存储：localStorage 封装（带 schema 版本信封）、备份导入导出。
  * 导入只用 JSON.parse + 逐字段校验，不执行任何来自数据的代码。
  */
 import type { GameData } from '@/core/data'
 import { DATA_VERSION_TAG } from '@/core/data/version'
 import type { Persisted, SavedBoard } from '@/core/types'
 import {
-  type BagData, type EldersData, type SettingsData, ValidationError, defaultSettings,
+  type BagData, type EldersData, type SettingsData, ValidationError,
   validateBag, validateElders, validateSavedBoards, validateSettings,
 } from './persist-schema'
 
@@ -130,93 +130,4 @@ export function parseBackup(text: string, game: GameData, pick?: SectionName[]):
     return { ok: false, error: e instanceof ValidationError ? `校验失败 · ${e.message}` : '校验失败' }
   }
   return { ok: true, sections, available }
-}
-
-/* ---------------- 觉醒版迁移 ---------------- */
-/** 在觉醒版页面的浏览器控制台运行，把数据复制到剪贴板 */
-export const JUEXING_EXPORT_SNIPPET = "copy(localStorage.getItem('laozuSolverV1'))"
-
-export interface MigrationResult {
-  sections: Pick<Sections, 'elders' | 'bag'> & { settings: Partial<SettingsData> }
-  notes: string[]
-}
-
-/**
- * 把觉醒版 localStorage「laozuSolverV1」转换为本工具的数据。
- * 觉醒版按法宝共享觉醒等级 → 迁移为对应长老的觉醒上限；已选红装每份副本取该上限。
- */
-export function migrateFromJuexing(text: string, game: GameData): { ok: true; result: MigrationResult } | { ok: false; error: string } {
-  let d: unknown
-  try {
-    d = JSON.parse(text)
-  } catch {
-    return { ok: false, error: '不是合法的 JSON（请粘贴控制台复制出的内容）' }
-  }
-  if (!d || typeof d !== 'object' || Array.isArray(d)) return { ok: false, error: '格式不正确' }
-  const r = d as Record<string, unknown>
-  const notes: string[] = []
-  const numMap = (v: unknown): Record<number, number> => {
-    const out: Record<number, number> = {}
-    if (v && typeof v === 'object' && !Array.isArray(v)) {
-      for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
-        if (typeof x === 'number' && Number.isInteger(x)) out[+k] = x
-      }
-    }
-    return out
-  }
-  const stars = numMap(r.elderStars)
-  const awaken = numMap(r.awaken)
-
-  const configs = new Map<number, { elderId: number; owned: boolean; star: number; awakenCap: number }>()
-  for (const equipId of new Set([...Object.keys(stars), ...Object.keys(awaken)].map(Number))) {
-    const elder = game.elderByRedEquip[equipId]
-    if (!elder) continue
-    const maxCap = game.awakenDb[equipId]?.maxLevel ?? 0
-    configs.set(elder.id, {
-      elderId: elder.id,
-      owned: true,
-      star: Math.max(0, Math.min(5, stars[equipId] ?? 0)),
-      awakenCap: Math.max(0, Math.min(maxCap, awaken[equipId] ?? 0)),
-    })
-  }
-  notes.push(`长老 ${configs.size} 位（星级/觉醒等级来自觉醒版）`)
-
-  const selected: BagData['selected'] = []
-  let skipped = 0
-  if (Array.isArray(r.selected)) {
-    for (const s of r.selected) {
-      if (!s || typeof s !== 'object') continue
-      const { name, tier, qty } = s as Record<string, unknown>
-      const eq = game.equips.find((e) => e.name === name && e.tier === tier)
-      if (!eq || typeof qty !== 'number' || qty < 1) {
-        skipped++
-        continue
-      }
-      const cap = eq.elderId !== undefined ? (configs.get(eq.elderId)?.awakenCap ?? 0) : 0
-      selected.push({ equipId: eq.id, copies: Array.from({ length: Math.min(42, Math.floor(qty)) }, () => ({ awaken: cap })) })
-    }
-  }
-  notes.push(`已选法宝 ${selected.length} 项${skipped ? `，${skipped} 项无法识别已跳过` : ''}`)
-
-  const lockedCells = Array.isArray(r.locked)
-    ? [...new Set(r.locked.filter((c): c is number => Number.isInteger(c) && c >= 0 && c < 42))]
-    : []
-  const settings: Partial<SettingsData> = {}
-  const defaults = defaultSettings()
-  if (r.target === 'power' || r.target === 'weighted') settings.target = r.target
-  if (typeof r.fillAll === 'boolean') settings.fillAll = r.fillAll
-  if (Array.isArray(r.talents)) {
-    settings.talents = [0, 1, 2, 3].map((i) => {
-      const id = Number((r.talents as unknown[])[i])
-      return Number.isInteger(id) && game.talentById[id] ? id : null
-    })
-  } else settings.talents = defaults.talents
-
-  return {
-    ok: true,
-    result: {
-      sections: { elders: [...configs.values()], bag: { selected, lockedCells, previousLayout: null }, settings },
-      notes,
-    },
-  }
 }

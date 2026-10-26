@@ -10,7 +10,7 @@ export function maxRedCopies(cfg: ElderConfig | undefined): number {
   return cfg.star >= 3 ? 2 : 1
 }
 
-/** 长老觉醒上限的合法范围：0 ~ 该红装 maxLevel（无觉醒数据为 0） */
+/** 长老觉醒的合法范围：0 ~ 该红装 maxLevel（无觉醒数据为 0） */
 export function maxAwakenCap(game: GameData, elderId: number): number {
   const elder = game.elderById[elderId]
   return elder ? (game.awakenDb[elder.redEquipId]?.maxLevel ?? 0) : 0
@@ -27,7 +27,7 @@ export function redItemsOf(selected: SelectedItem[]): RedItem[] {
 
 /**
  * 红装校验，返回给用户看的提示（空数组 = 通过）。
- * 规则：种类 ≤ 2；长老须已拥有；份数 ≤ maxRedCopies；每份觉醒 ≤ 长老觉醒上限。
+ * 规则：种类 ≤ 2；长老须已拥有；份数 ≤ maxRedCopies；每份觉醒 ≤ 长老觉醒等级。
  */
 export function checkRedEquips(items: RedItem[], configs: Record<number, ElderConfig>, game: GameData): string[] {
   const warnings: string[] = []
@@ -54,7 +54,7 @@ export function checkRedEquips(items: RedItem[], configs: Record<number, ElderCo
     }
     const over = awakens.filter((a) => a > cfg.awakenCap)
     if (over.length) {
-      warnings.push(`${eq.name}：觉醒 ${Math.max(...over)} 超过长老「${elder.name}」的觉醒上限 ${cfg.awakenCap}`)
+      warnings.push(`${eq.name}：觉醒 ${Math.max(...over)} 超过长老「${elder.name}」的觉醒 ${cfg.awakenCap}（红装最多觉醒到长老觉醒等级）`)
     }
   }
   return warnings

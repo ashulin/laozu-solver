@@ -1,10 +1,15 @@
-/** 账号级长老配置（单一数据源）：是否拥有 / 星级 / 觉醒上限 */
+/**
+ * 账号级长老配置（单一数据源）：是否拥有 / 星级 / 觉醒。
+ * 目前只有一个默认账号（不支持切换），默认拥有全部长老、0 星、觉醒 0。
+ */
 import { defineStore } from 'pinia'
 import { GAME } from '@/core/data'
 import { maxAwakenCap, maxRedCopies } from '@/core/solver/red-rules'
 import type { Elder, ElderConfig, Equip, AwakenEntry } from '@/core/types'
 import { appStore } from '@/services/app-storage'
 import { useBagStore } from './bag'
+
+export const DEFAULT_ACCOUNT_NAME = '默认账号'
 
 export interface ElderView {
   elder: Elder
@@ -15,7 +20,8 @@ export interface ElderView {
   maxCopies: number
 }
 
-const emptyConfig = (elderId: number): ElderConfig => ({ elderId, owned: false, star: 0, awakenCap: 0 })
+/** 默认账号下未单独设置过的长老：已拥有、0 星、觉醒 0 */
+export const defaultElderConfig = (elderId: number): ElderConfig => ({ elderId, owned: true, star: 0, awakenCap: 0 })
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.floor(v)))
 
 export const useEldersStore = defineStore('elders', {
@@ -26,7 +32,15 @@ export const useEldersStore = defineStore('elders', {
     return { configs }
   },
   getters: {
-    config: (s) => (elderId: number): ElderConfig => s.configs[elderId] ?? emptyConfig(elderId),
+    config: (s) => (elderId: number): ElderConfig => s.configs[elderId] ?? defaultElderConfig(elderId),
+    /** 全部长老的完整配置（含默认值），用于持久化与备份 */
+    allConfigs(): ElderConfig[] {
+      return GAME.elders.map((e) => ({ ...this.config(e.id) }))
+    },
+    /** elderId → 完整配置（含默认值）；求解与红装校验必须用它，不能直接读 configs */
+    configMap(): Record<number, ElderConfig> {
+      return Object.fromEntries(GAME.elders.map((e) => [e.id, this.config(e.id)]))
+    },
     views(): ElderView[] {
       return GAME.elders.map((elder) => {
         const config = this.config(elder.id)
@@ -40,7 +54,9 @@ export const useEldersStore = defineStore('elders', {
         }
       })
     },
-    ownedCount: (s) => Object.values(s.configs).filter((c) => c.owned).length,
+    ownedCount(): number {
+      return GAME.elders.filter((e) => this.config(e.id).owned).length
+    },
   },
   actions: {
     update(elderId: number, patch: Partial<Omit<ElderConfig, 'elderId'>>) {
@@ -49,7 +65,7 @@ export const useEldersStore = defineStore('elders', {
       next.star = clamp(next.star, 0, 5)
       next.awakenCap = clamp(next.awakenCap, 0, maxAwakenCap(GAME, elderId))
       this.configs[elderId] = next
-      // 下调觉醒上限时，已选中该红装超出上限的副本压到上限
+      // 下调长老觉醒时，已选中该红装超出的副本压到新等级
       if (next.awakenCap < cur.awakenCap) {
         const elder = GAME.elderById[elderId]
         if (elder) useBagStore().clampAwaken(elder.redEquipId, next.awakenCap)
@@ -68,7 +84,8 @@ export const useEldersStore = defineStore('elders', {
       this.configs = Object.fromEntries(list.map((c) => [c.elderId, { ...c }]))
     },
     persist() {
-      appStore().save('elders', Object.values(this.configs).filter((c) => c.owned || c.star || c.awakenCap))
+      // 保存全部长老的完整配置：「未拥有」也要显式落盘，否则下次会回到默认的「已拥有」
+      appStore().save('elders', this.allConfigs)
     },
   },
 })

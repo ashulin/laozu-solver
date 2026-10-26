@@ -73,7 +73,7 @@ export const useSolverStore = defineStore('solver', {
         return false
       }
       const ctx = buildContext(instances, {
-        elderConfigs: elders.configs,
+        elderConfigs: elders.configMap,
         talents: settings.talents,
         target: settings.target,
         weights: settings.weights,

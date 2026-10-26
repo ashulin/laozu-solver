@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { GAME } from '@/core/data'
 import { useEldersStore } from '@/stores/elders'
 
-/** 「长老·孙悟空 ★3 觉醒≤2」徽标：所有出现红装的地方复用 */
+/** 「长老·孙悟空 ★3 觉醒2」徽标：所有出现红装的地方复用 */
 const props = withDefaults(defineProps<{ equipId: number; compact?: boolean }>(), { compact: false })
 const elders = useEldersStore()
 
@@ -20,7 +20,7 @@ const hasAwaken = computed(() => !!(elder.value && GAME.awakenDb[elder.value.red
     <span class="name">{{ compact ? elder.name : `长老·${elder.name}` }}</span>
     <template v-if="cfg.owned">
       <span class="star">★{{ cfg.star }}</span>
-      <span v-if="hasAwaken" class="aw">觉醒≤{{ cfg.awakenCap }}</span>
+      <span v-if="hasAwaken" class="aw">觉醒{{ cfg.awakenCap }}</span>
     </template>
     <span v-else class="star">未拥有</span>
   </span>

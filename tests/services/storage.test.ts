@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { GAME } from '@/core/data'
 import { defaultBag, defaultSettings, validateBag, validateElders, validateSettings } from '@/services/persist-schema'
-import { exportBackup, KEYS, LocalStore, migrateFromJuexing, parseBackup, type StorageLike } from '@/services/storage'
+import { exportBackup, KEYS, LocalStore, parseBackup, type StorageLike } from '@/services/storage'
 
 class MemStorage implements StorageLike {
   map = new Map<string, string>()
@@ -107,39 +107,5 @@ describe('备份', () => {
     expect(parseBackup('{"app":"x"}', GAME).ok).toBe(false)
     expect(parseBackup(JSON.stringify({ app: 'laozu-solver-next', v: 2, sections: {} }), GAME).ok).toBe(false)
     expect(parseBackup('x'.repeat(3 * 1024 * 1024), GAME)).toEqual({ ok: false, error: '文件过大' })
-  })
-})
-
-describe('觉醒版迁移', () => {
-  const jgb = GAME.equipById[swk.redEquipId]
-  const legacy = {
-    selected: [{ name: jgb.name, tier: 5, qty: 2 }, { name: '蕴金戒', tier: 4, qty: 3 }, { name: '不存在', tier: 1, qty: 1 }],
-    elderStars: { [jgb.id]: 5 },
-    awaken: { [jgb.id]: 3 },
-    locked: [0, 6, 99],
-    talents: ['', '', '', ''],
-    target: 'weighted',
-    fillAll: true,
-  }
-
-  it('星级/觉醒按法宝 → 长老配置；共享觉醒迁移为上限，副本取上限', () => {
-    const r = migrateFromJuexing(JSON.stringify(legacy), GAME)
-    expect(r.ok).toBe(true)
-    if (!r.ok) return
-    const { sections, notes } = r.result
-    expect(sections.elders).toEqual([{ elderId: swk.id, owned: true, star: 5, awakenCap: 3 }])
-    expect(sections.bag.selected[0]).toEqual({ equipId: jgb.id, copies: [{ awaken: 3 }, { awaken: 3 }] })
-    expect(sections.bag.selected[1].copies).toHaveLength(3)
-    expect(sections.bag.lockedCells).toEqual([0, 6])
-    expect(sections.settings.target).toBe('weighted')
-    expect(sections.settings.talents).toEqual([null, null, null, null])
-    expect(notes.join()).toContain('1 项无法识别')
-    // 迁移结果能通过严格校验
-    expect(() => validateElders(sections.elders, GAME)).not.toThrow()
-    expect(() => validateBag(sections.bag, GAME)).not.toThrow()
-  })
-
-  it('非 JSON 报错', () => {
-    expect(migrateFromJuexing('xx', GAME).ok).toBe(false)
   })
 })

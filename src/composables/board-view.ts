@@ -44,7 +44,7 @@ export function useBoardView() {
   const boards = useBoardsStore()
 
   const ctxInput = () => ({
-    elderConfigs: elders.configs, talents: settings.talents, target: settings.target,
+    elderConfigs: elders.configMap, talents: settings.talents, target: settings.target,
     weights: settings.weights, fillAll: false, locked: bag.lockedCells,
   })
 

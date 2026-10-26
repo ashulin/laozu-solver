@@ -18,7 +18,7 @@ export const useBagStore = defineStore('bag', {
     countOf: (s) => (equipId: number) => s.selected.find((it) => it.equipId === equipId)?.copies.length ?? 0,
     redKinds: (s) => s.selected.filter((it) => GAME.equipById[it.equipId]?.elderId !== undefined).map((it) => it.equipId),
     warnings(s): string[] {
-      return checkRedEquips(redItemsOf(s.selected), useEldersStore().configs, GAME)
+      return checkRedEquips(redItemsOf(s.selected), useEldersStore().configMap, GAME)
     },
   },
   actions: {

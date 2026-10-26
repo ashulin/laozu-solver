@@ -1,9 +1,11 @@
 /**
- * 网格自动定位（移植自原版 fit worker）。思路：
+ * 网格自动定位（移植自原版 fit worker，并做了两处增强）。思路：
  *   1. 网格打分：42 个格子的底色越接近调色板（品质色/空格/锁格）分越高。
  *   2. 在缩小图上粗搜格宽和左上角，再回到原图分两级细化。
  *   3. 用「元素徽章字形能认出的格子数」（锚点数）在候选里挑最优，并尝试整行/整列平移纠偏。
- * 觉醒版删掉了这一步，只能手动框选；这里补回来。
+ *   4.（新增）外框纠偏：按背包深棕色边框是否贴合，纠正整行错位（上方面板颜色接近格子底色时原版会错）。
+ *   5.（新增）边缘吸附：格宽估错时，按左、右、下三条边框重新确定格宽和位置。
+ * 觉醒版删掉了自动定位，只能手动框选；这里补回来。
  */
 import { ELEMENT_GLYPHS, GEO, TH } from './model'
 import { bestCorrelation, cellBackground, darkRatio, downsample, paletteDistance, type Grid, type RgbImage } from './sampling'
@@ -19,6 +21,7 @@ export interface FitResult {
   grid: Grid
   score: number // 底色分，满分 42
   anchors: number // 认出元素徽章的格子数
+  frame: number // 外框贴合度 0~1
   converged: boolean // false → 界面应提示手动框选
 }
 
@@ -62,6 +65,42 @@ export function countAnchors(img: RgbImage, grid: Grid, quick = false): number {
     }
   }
   return found
+}
+
+/**
+ * 外框得分（0~1）：背包下、左、右三侧紧贴网格的是一圈深棕色边框（上方是「法宝」标题牌，不参与）。
+ * 在三条边带上采样，统计接近边框色的比例，取三侧平均。网格整行错位或格宽不对时，边带会落进格子或其它面板。
+ */
+export const FRAME_COLOR: [number, number, number] = [104, 92, 66]
+const FRAME_TOLERANCE = 32
+
+function frameBand(img: RgbImage, x0: number, y0: number, x1: number, y1: number): number {
+  let hit = 0
+  let total = 0
+  const sx = Math.max(1, (x1 - x0) / 48)
+  const sy = Math.max(1, (y1 - y0) / 48)
+  for (let y = y0; y < y1; y += sy) {
+    for (let x = x0; x < x1; x += sx) {
+      const xx = Math.round(x)
+      const yy = Math.round(y)
+      if (xx < 0 || yy < 0 || xx >= img.w || yy >= img.h) { total++; continue }
+      const p = img.px(xx, yy)
+      total++
+      if (Math.hypot(p[0] - FRAME_COLOR[0], p[1] - FRAME_COLOR[1], p[2] - FRAME_COLOR[2]) < FRAME_TOLERANCE) hit++
+    }
+  }
+  return total ? hit / total : 0
+}
+
+export function frameScore(img: RgbImage, grid: Grid): number {
+  const W = COLS * grid.pw
+  const H = ROWS * grid.ph
+  const t0 = 0.06 * grid.pw
+  const t1 = 0.16 * grid.pw
+  const below = frameBand(img, grid.ox + 0.1 * grid.pw, grid.oy + H + t0, grid.ox + W - 0.1 * grid.pw, grid.oy + H + t1)
+  const left = frameBand(img, grid.ox - t1, grid.oy + 0.1 * grid.ph, grid.ox - t0, grid.oy + H - 0.1 * grid.ph)
+  const right = frameBand(img, grid.ox + W + t0, grid.oy + 0.1 * grid.ph, grid.ox + W + t1, grid.oy + H - 0.1 * grid.ph)
+  return (below + left + right) / 3
 }
 
 interface Cand { s: number; ox: number; oy: number; p: number }
@@ -114,7 +153,7 @@ export function fitGrid(img: RgbImage): FitResult {
       }
     }
   }
-  if (!byPitch.size) return { grid: fallback(img), score: 0, anchors: 0, converged: false }
+  if (!byPitch.size) return { grid: fallback(img), score: 0, anchors: 0, frame: 0, converged: false }
 
   // 2. 回到原图：先固定格宽细化位置，再按「快速锚点数」挑 4 个做全参数细化
   const top = [...byPitch.values()].sort((a, b) => b.s - a.s).slice(0, 10)
@@ -150,9 +189,9 @@ export function fitGrid(img: RgbImage): FitResult {
       if (better(s, best)) best = s
     }
   }
-  if (!best) return { grid: fallback(img), score: 0, anchors: 0, converged: false }
+  if (!best) return { grid: fallback(img), score: 0, anchors: 0, frame: 0, converged: false }
 
-  // 4. 整行/整列错位纠偏：上下左右各平移一格，锚点数更多就采用（最多两轮）
+  // 4. 整行/整列错位纠偏（原版）：上下左右各平移一格，锚点数更多就采用（最多两轮）
   for (let round = 0; round < 2; round++) {
     const base: Scored = best
     let moved = false
@@ -166,13 +205,83 @@ export function fitGrid(img: RgbImage): FitResult {
     if (!moved) break
   }
 
-  if (best.s < MIN_SCORE && best.anchors < MIN_ANCHORS) {
-    return { grid: fallback(img), score: best.s, anchors: best.anchors, converged: false }
+  // 5. 外框纠偏（新增）：底色分和锚点数在整行错位时常常持平（上方面板颜色也接近格子底色），
+  //    而背包下、左、右三侧的深棕色边框只有在网格正确时才贴合。按外框分挑选整行/整列平移。
+  let grid = toGrid(best)
+  let frame = frameScore(img, grid)
+  const base = grid
+  const baseFrame = frame
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue
+      const g = { ...base, ox: base.ox + dx * base.pw, oy: base.oy + dy * base.ph }
+      const f = frameScore(img, g)
+      if (f > baseFrame + FRAME_SHIFT_MARGIN && f > frame) { grid = g; frame = f }
+    }
+  }
+  // 6. 边缘吸附（新增）：格宽估错时外框分偏低，直接按左、右、下三条边框重新确定格宽和位置
+  if (frame < FRAME_OK) {
+    const snapped = snapToFrame(img, grid)
+    const f = snapped ? frameScore(img, snapped) : 0
+    if (snapped && f > frame) { grid = snapped; frame = f }
+  }
+  const score = gridScore(img, grid)
+  const anchors = countAnchors(img, grid)
+
+  if (score < MIN_SCORE && anchors < MIN_ANCHORS) {
+    return { grid: fallback(img), score, anchors, converged: false, frame }
   }
   return {
-    grid: toGrid(best),
-    score: best.s,
-    anchors: best.anchors,
-    converged: best.s >= TH.fitConverged || best.anchors >= MIN_ANCHORS,
+    grid,
+    score,
+    anchors,
+    frame,
+    converged: frame >= FRAME_MIN && (score >= TH.fitConverged || anchors >= MIN_ANCHORS),
   }
+}
+
+/** 整行/整列平移须比当前外框分高出这么多才采用，避免噪声误判 */
+const FRAME_SHIFT_MARGIN = 0.1
+/** 外框分达到此值视为贴合，不再吸附 */
+const FRAME_OK = 0.9
+/** 外框分低于此值判为定位失败（实测正确网格 0.93~1.00，错位网格 ≤ 0.77） */
+export const FRAME_MIN = 0.85
+
+/**
+ * 在 x 处竖直（或 y 处水平）切一刀，比较刀两侧窄带里边框色像素的比例。
+ * side=-1 表示边框在刀的负方向一侧（左边框、上边框），+1 表示在正方向一侧（右边框、下边框）。
+ */
+function edgeStrength(img: RgbImage, vertical: boolean, at: number, from: number, to: number, side: -1 | 1, band: number): number {
+  const out = vertical
+    ? frameBand(img, side < 0 ? at - band : at, from, side < 0 ? at : at + band, to)
+    : frameBand(img, from, side < 0 ? at - band : at, to, side < 0 ? at : at + band)
+  const inn = vertical
+    ? frameBand(img, side < 0 ? at : at - band, from, side < 0 ? at + band : at, to)
+    : frameBand(img, from, side < 0 ? at : at - band, to, side < 0 ? at + band : at)
+  return out - inn
+}
+
+/** 在 [center - range, center + range] 内找边缘强度最大的位置 */
+function findEdge(img: RgbImage, vertical: boolean, center: number, range: number, from: number, to: number, side: -1 | 1, band: number): number {
+  let best = center
+  let bestS = -2
+  for (let v = center - range; v <= center + range; v += 1) {
+    const s = edgeStrength(img, vertical, v, from, to, side, band)
+    if (s > bestS) { bestS = s; best = v }
+  }
+  return best
+}
+
+/** 按左、右、下三条边框重新确定网格：格宽 = (右 - 左) / 7，顶边 = 底边 - 6 × 格宽 */
+export function snapToFrame(img: RgbImage, g: Grid): Grid | null {
+  const range = g.pw * 0.3
+  const band = Math.max(3, g.pw * 0.08)
+  const y0 = g.oy + g.ph
+  const y1 = g.oy + (ROWS - 1) * g.ph
+  const left = findEdge(img, true, g.ox, range, y0, y1, -1, band)
+  const right = findEdge(img, true, g.ox + COLS * g.pw, range, y0, y1, 1, band)
+  const p = (right - left) / COLS
+  if (!(p > g.pw * 0.85 && p < g.pw * 1.15)) return null
+  const bottom = findEdge(img, false, g.oy + ROWS * g.ph, range, left + p, right - p, 1, band)
+  return { ox: left, oy: bottom - ROWS * p, pw: p, ph: p }
 }

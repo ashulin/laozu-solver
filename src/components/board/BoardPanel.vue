@@ -136,7 +136,8 @@ function adopt() {
 
 <style scoped>
 .board-panel { display: flex; flex-direction: column; gap: 10px; }
-.modes { margin-left: auto; display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.board-panel h2 { flex-wrap: wrap; white-space: nowrap; }
+.modes { margin-left: auto; display: inline-flex; gap: 4px; flex-wrap: wrap; white-space: normal; }
 .modes button.on { border-color: var(--gold); color: var(--gold); background: var(--gold-weak); }
 .score-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; min-height: 32px; }
 .big { font-size: 24px; font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; }

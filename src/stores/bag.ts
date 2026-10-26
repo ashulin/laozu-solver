@@ -87,6 +87,17 @@ export const useBagStore = defineStore('bag', {
     replaceSelected(selected: SelectedItem[]) {
       this.selected = selected.map((it) => ({ equipId: it.equipId, copies: it.copies.map((c) => ({ ...c })) }))
     },
+    /** 用某个摆盘里的法宝替换已选列表（同款合并，每件保留自己的觉醒等级） */
+    adoptLayout(pieces: SavedPiece[]) {
+      const byEquip = new Map<number, SelectedItem>()
+      for (const p of pieces) {
+        if (!GAME.equipById[p.equipId]) continue
+        const it = byEquip.get(p.equipId) ?? { equipId: p.equipId, copies: [] }
+        it.copies.push({ awaken: p.awaken })
+        byEquip.set(p.equipId, it)
+      }
+      this.selected = [...byEquip.values()]
+    },
     persist() {
       appStore().save('bag', { selected: this.selected, lockedCells: this.lockedCells, previousLayout: this.previousLayout })
     },

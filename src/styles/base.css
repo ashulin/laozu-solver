@@ -1,0 +1,90 @@
+:root {
+  /* 底色与文字 */
+  --bg: #14171f;
+  --bg-elev: #1b1f29;
+  --bg-panel: #1f2430;
+  --bg-hover: #2a3040;
+  --line: #2f3646;
+  --outline: #0e0a14;
+  --text: #e8eaf0;
+  --text-dim: #9aa3b5;
+  --gold: #f5d67b;
+  --gold-weak: rgba(245, 214, 123, 0.14);
+  --ok: #66bb6a;
+  --warn: #ffb74d;
+  --danger: #ff8a80;
+
+  /* 品阶色：5红 4黄 3紫 2蓝 1绿 */
+  --tier-5: #e53935;
+  --tier-4: #f9a825;
+  --tier-3: #8e24aa;
+  --tier-2: #1e88e5;
+  --tier-1: #43a047;
+
+  /* 元素色：金木水火土雷邪体 */
+  --el-1: #c9971f;
+  --el-2: #43a047;
+  --el-3: #1e88e5;
+  --el-4: #e53935;
+  --el-5: #8d6e63;
+  --el-6: #8e24aa;
+  --el-7: #ad1457;
+  --el-8: #fb8c00;
+
+  --radius: 10px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body {
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select { font: inherit; color: inherit; }
+button {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--bg-hover);
+  border-radius: 8px;
+  padding: 5px 12px;
+}
+button:hover:not(:disabled) { border-color: var(--gold); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.primary { background: var(--gold); color: #1b1f29; border-color: var(--gold); font-weight: 600; }
+button.ghost { background: transparent; }
+button.small { padding: 2px 8px; font-size: 12px; }
+input, select {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+input[type='checkbox'] { accent-color: var(--gold); }
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+.panel > h2 { margin: 0 0 10px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.muted { color: var(--text-dim); }
+.small { font-size: 12px; }
+.ok { color: var(--ok); }
+.warn { color: var(--warn); }
+.danger { color: var(--danger); }
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+}
+.chip.on { border-color: var(--gold); background: var(--gold-weak); color: var(--gold); }

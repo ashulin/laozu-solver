@@ -1,0 +1,4 @@
+tests/fixtures/ocr/*.jpg filter=lfs diff=lfs merge=lfs -text
+tests/fixtures/ocr/*.jpeg filter=lfs diff=lfs merge=lfs -text
+tests/fixtures/ocr/*.png filter=lfs diff=lfs merge=lfs -text
+tests/fixtures/ocr/*.webp filter=lfs diff=lfs merge=lfs -text

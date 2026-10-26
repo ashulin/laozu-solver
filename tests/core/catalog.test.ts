@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { GAME } from '@/core/data'
 import { describeAwakenEffect, describeAwakenLevels } from '@/core/awaken-text'
-import { buildCatalog, defaultTierOf, facetCounts, filterCatalog } from '@/core/catalog'
+import { bagElements, buildCatalog, compareEquipByCells, defaultTierOf, facetCounts, filterCatalog } from '@/core/catalog'
 import { scoreLayout, toSavedPieces } from '@/core/solver/layout-score'
 import { evaluate } from '@/core/solver/evaluate'
 import { buildContext, buildInstances } from '@/core/solver/instances'
@@ -25,6 +25,36 @@ describe('buildCatalog', () => {
 
   it('80 件红装都带长老', () => {
     expect(catalog.filter((e) => e.elder)).toHaveLength(80)
+  })
+
+  it('默认按占格数从小到大排序，同格数按元素', () => {
+    for (let i = 1; i < catalog.length; i++) {
+      const a = catalog[i - 1]
+      const b = catalog[i]
+      expect(a.cellCount < b.cellCount || (a.cellCount === b.cellCount && a.element <= b.element), `${a.name} → ${b.name}`).toBe(true)
+    }
+    expect(catalog[0].cellCount).toBe(1)
+  })
+
+  it('筛选后仍保持占格数升序', () => {
+    const r = filterCatalog(catalog, F({ elements: [4] }))
+    expect(r.map((e) => e.cellCount)).toEqual([...r.map((e) => e.cellCount)].sort((a, b) => a - b))
+  })
+})
+
+describe('bagElements / compareEquipByCells', () => {
+  const eqOf = (cells: number, element: number) => GAME.equips.find((e) => GAME.shapeById[e.shapeId].cellCount === cells && e.element === element && e.quality < 5)!
+
+  it('无已选 → 空（即全部元素）；同元素去重；两种元素升序', () => {
+    expect(bagElements(GAME, [])).toEqual([])
+    expect(bagElements(GAME, [eqOf(1, 3).id, eqOf(2, 3).id])).toEqual([3])
+    expect(bagElements(GAME, [eqOf(2, 4).id, eqOf(1, 1).id, eqOf(3, 4).id])).toEqual([1, 4])
+  })
+
+  it('已选法宝按占格数升序，同格数按元素', () => {
+    const list = [eqOf(4, 1), eqOf(1, 4), eqOf(2, 2), eqOf(1, 1)]
+    const sorted = [...list].sort((a, b) => compareEquipByCells(GAME, a, b))
+    expect(sorted.map((e) => [GAME.shapeById[e.shapeId].cellCount, e.element])).toEqual([[1, 1], [1, 4], [2, 2], [4, 1]])
   })
 })
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { GAME } from '@/core/data'
+import { compareEquipByCells } from '@/core/catalog'
 import { ELEMENT_NAME } from '@/core/types'
 import { useBagStore } from '@/stores/bag'
 import { useEldersStore } from '@/stores/elders'
@@ -16,7 +17,7 @@ const rows = computed(() => bag.selected.map((it) => {
   const cap = eq.elderId !== undefined ? elders.config(eq.elderId).awakenCap : 0
   const hasAwaken = eq.elderId !== undefined && !!GAME.awakenDb[eq.id]
   return { it, eq, cells: shape.cellCount * it.copies.length, cap, hasAwaken }
-}))
+}).sort((a, b) => compareEquipByCells(GAME, a.eq, b.eq)))
 
 function plus(equipId: number) {
   const r = bag.add(equipId)

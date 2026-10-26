@@ -27,7 +27,25 @@ export function buildCatalog(game: GameData): CatalogEntry[] {
   }
   const list = [...byName.values()]
   for (const e of list) e.tiers.sort((a, b) => a.tier - b.tier)
-  return list.sort((a, b) => a.element - b.element || a.name.localeCompare(b.name, 'zh-Hans-CN'))
+  return list.sort((a, b) => a.cellCount - b.cellCount || a.element - b.element || a.name.localeCompare(b.name, 'zh-Hans-CN'))
+}
+
+/** 已选法宝排序：占格数升序 → 元素 → 名称 → 阶 */
+export function compareEquipByCells(game: GameData, a: Equip, b: Equip): number {
+  return game.shapeById[a.shapeId].cellCount - game.shapeById[b.shapeId].cellCount
+    || a.element - b.element
+    || a.name.localeCompare(b.name, 'zh-Hans-CN')
+    || a.tier - b.tier
+}
+
+/** 已选法宝涉及的元素（升序去重）；目录的元素筛选据此联动 */
+export function bagElements(game: GameData, equipIds: number[]): ElementId[] {
+  const set = new Set<ElementId>()
+  for (const id of equipIds) {
+    const eq = game.equipById[id]
+    if (eq) set.add(eq.element)
+  }
+  return [...set].sort((a, b) => a - b)
 }
 
 export function matchKeyword(entry: CatalogEntry, keyword: string): boolean {

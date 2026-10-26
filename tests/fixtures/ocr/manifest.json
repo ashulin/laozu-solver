@@ -1,0 +1,82 @@
+{
+  "_说明": [
+    "截图识别的标准答案。坐标 [行, 列] 从 0 开始，左上角为 [0, 0]，共 6 行 7 列。",
+    "anchor：法宝左上角带元素/形态徽章的那一格（形状按行优先的第一格）。",
+    "awaken：法宝右下角火焰角标上的数字（青 1 / 蓝 2 / 紫 3），没有角标为 0。",
+    "verified=false 的条目是从截图人工判读的，待用户确认；normals 留空表示普通法宝的名称尚未标注。"
+  ],
+  "fixtures": [
+    {
+      "file": "outgame-fire-01.jpg",
+      "scene": "outgame",
+      "sceneNote": "弟子详情页（游历完成，法宝固定，只能调摆放）",
+      "size": [1280, 2774],
+      "element": 4,
+      "empty": [[0, 0]],
+      "locked": [],
+      "reds": [
+        { "name": "食为天鼎", "anchor": [0, 5], "cells": [[0, 5], [0, 6], [1, 5], [1, 6]], "awaken": 3 },
+        { "name": "食为天鼎", "anchor": [4, 5], "cells": [[4, 5], [4, 6], [5, 5], [5, 6]], "awaken": 3 },
+        { "name": "乾坤浑天", "anchor": [1, 2], "cells": [[1, 2], [2, 2], [3, 2], [4, 1], [4, 2]], "awaken": 3, "note": "与燃欲燎魂同形状同元素同形态，按画面（乾坤圈+混天绫）判断" },
+        { "name": "乾坤浑天", "anchor": [1, 4], "cells": [[1, 4], [2, 4], [3, 4], [4, 3], [4, 4]], "awaken": 3 }
+      ],
+      "normalBadges": [],
+      "normals": [],
+      "verified": false
+    },
+    {
+      "file": "outgame-metal-01.jpg",
+      "scene": "outgame",
+      "sceneNote": "弟子详情页",
+      "size": [1280, 2781],
+      "element": 1,
+      "empty": [],
+      "locked": [],
+      "reds": [
+        { "name": "朔气飞星", "anchor": [3, 0], "cells": [[3, 0], [3, 1], [4, 0], [5, 0]], "awaken": 2 },
+        { "name": "朔气飞星", "anchor": [3, 3], "cells": [[3, 3], [3, 4], [4, 3], [5, 3]], "awaken": 2 },
+        { "name": "金翎荡云", "anchor": [3, 2], "cells": [[3, 2], [4, 1], [4, 2]], "awaken": 3 },
+        { "name": "金翎荡云", "anchor": [2, 6], "cells": [[2, 6], [3, 5], [3, 6]], "awaken": 3 }
+      ],
+      "normalBadges": [
+        { "anchor": [2, 5], "desc": "蓝色 1 格金系戒指，右下角青色火焰 1", "value": 1 },
+        { "anchor": [4, 4], "desc": "黄色 2 格金系枪（占 [4,4][5,4]），右下角蓝色火焰 2", "value": 2 }
+      ],
+      "normals": [],
+      "verified": false
+    },
+    {
+      "file": "outgame-metal-02.jpg",
+      "scene": "outgame",
+      "sceneNote": "弟子详情页（iPhone，顶部有灵动岛）",
+      "size": [1280, 2781],
+      "element": 1,
+      "empty": [],
+      "locked": [],
+      "reds": [
+        { "name": "朔气飞星", "anchor": [0, 0], "cells": [[0, 0], [0, 1], [1, 0], [2, 0]], "awaken": 2 },
+        { "name": "金锋无影", "anchor": [0, 2], "cells": [[0, 2], [1, 1], [1, 2], [2, 1], [2, 2]], "awaken": 1 },
+        { "name": "朔气飞星", "anchor": [2, 4], "cells": [[2, 4], [2, 5], [3, 4], [4, 4]], "awaken": 2 }
+      ],
+      "normalBadges": [],
+      "normals": [],
+      "verified": false
+    },
+    {
+      "file": "ingame-earth-01.jpg",
+      "scene": "ingame",
+      "sceneNote": "游历中（单局内，法宝还会变化）；网格上方战场区还有待放置的法宝，不属于背包",
+      "size": [1080, 2400],
+      "element": 5,
+      "empty": [[0, 2], [0, 4], [1, 4], [1, 6], [2, 3], [3, 5], [5, 0], [5, 1]],
+      "locked": [[3, 6], [4, 6], [5, 6]],
+      "reds": [
+        { "name": "逐日镇岳", "anchor": [2, 1], "cells": [[2, 1], [3, 1], [4, 0], [4, 1]], "awaken": 1 },
+        { "name": "泰山压顶", "anchor": [3, 3], "cells": [[3, 3], [4, 2], [4, 3], [5, 2], [5, 3]], "awaken": 0, "note": "幡面写着「皇天后土」，按形状判断为泰山压顶" }
+      ],
+      "normalBadges": [],
+      "normals": [],
+      "verified": false
+    }
+  ]
+}

@@ -27,15 +27,30 @@ export function buildCatalog(game: GameData): CatalogEntry[] {
   }
   const list = [...byName.values()]
   for (const e of list) e.tiers.sort((a, b) => a.tier - b.tier)
-  return list.sort((a, b) => a.cellCount - b.cellCount || a.element - b.element || a.name.localeCompare(b.name, 'zh-Hans-CN'))
+  // 普通法宝在前、红装在后；各段内：占格数 → 最低阶 → 元素 → 名称
+  return list.sort((a, b) => Number(!!a.elder) - Number(!!b.elder)
+    || a.cellCount - b.cellCount
+    || a.tiers[0].tier - b.tiers[0].tier
+    || a.element - b.element
+    || a.name.localeCompare(b.name, 'zh-Hans-CN'))
 }
 
-/** 已选法宝排序：占格数升序 → 元素 → 名称 → 阶 */
-export function compareEquipByCells(game: GameData, a: Equip, b: Equip): number {
-  return game.shapeById[a.shapeId].cellCount - game.shapeById[b.shapeId].cellCount
-    || a.element - b.element
-    || a.name.localeCompare(b.name, 'zh-Hans-CN')
-    || a.tier - b.tier
+/** 已选列表的一行：法宝 + 该行副本的最高觉醒等级（非红装为 0） */
+export interface SortableSelected { eq: Equip; awaken: number }
+
+/**
+ * 已选法宝排序：普通法宝在前、红装在后。
+ * 普通：占格数 → 品阶（低到高）；红装：占格数 → 觉醒（未觉醒到已觉醒）。
+ * 再按元素、名称兜底，保证顺序稳定。
+ */
+export function compareSelected(game: GameData, a: SortableSelected, b: SortableSelected): number {
+  const redA = a.eq.elderId !== undefined
+  const redB = b.eq.elderId !== undefined
+  return Number(redA) - Number(redB)
+    || game.shapeById[a.eq.shapeId].cellCount - game.shapeById[b.eq.shapeId].cellCount
+    || (redA ? a.awaken - b.awaken : a.eq.tier - b.eq.tier)
+    || a.eq.element - b.eq.element
+    || a.eq.name.localeCompare(b.eq.name, 'zh-Hans-CN')
 }
 
 /** 已选法宝涉及的元素（升序去重）；目录的元素筛选据此联动 */

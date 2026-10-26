@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { GAME } from '@/core/data'
 import { describeAwakenEffect, describeAwakenLevels } from '@/core/awaken-text'
-import { bagElements, buildCatalog, compareEquipByCells, defaultTierOf, facetCounts, filterCatalog } from '@/core/catalog'
+import { bagElements, buildCatalog, compareSelected, defaultTierOf, facetCounts, filterCatalog } from '@/core/catalog'
 import { scoreLayout, toSavedPieces } from '@/core/solver/layout-score'
 import { evaluate } from '@/core/solver/evaluate'
 import { buildContext, buildInstances } from '@/core/solver/instances'
@@ -27,23 +27,32 @@ describe('buildCatalog', () => {
     expect(catalog.filter((e) => e.elder)).toHaveLength(80)
   })
 
-  it('默认按占格数从小到大排序，同格数按元素', () => {
-    for (let i = 1; i < catalog.length; i++) {
-      const a = catalog[i - 1]
-      const b = catalog[i]
-      expect(a.cellCount < b.cellCount || (a.cellCount === b.cellCount && a.element <= b.element), `${a.name} → ${b.name}`).toBe(true)
+  it('普通法宝在前、红装在后；各段内按占格数从小到大，同格数按元素', () => {
+    const firstRed = catalog.findIndex((e) => e.elder)
+    expect(catalog.slice(0, firstRed).every((e) => !e.elder)).toBe(true)
+    expect(catalog.slice(firstRed).every((e) => e.elder)).toBe(true)
+    for (const seg of [catalog.slice(0, firstRed), catalog.slice(firstRed)]) {
+      for (let i = 1; i < seg.length; i++) {
+        const a = seg[i - 1]
+        const b = seg[i]
+        expect(a.cellCount < b.cellCount || (a.cellCount === b.cellCount && a.element <= b.element), `${a.name} → ${b.name}`).toBe(true)
+      }
     }
     expect(catalog[0].cellCount).toBe(1)
+    expect(catalog[firstRed].cellCount).toBe(3) // 红装最小 3 格
   })
 
-  it('筛选后仍保持占格数升序', () => {
+  it('筛选后仍保持「普通在前、红装在后，段内占格升序」', () => {
     const r = filterCatalog(catalog, F({ elements: [4] }))
-    expect(r.map((e) => e.cellCount)).toEqual([...r.map((e) => e.cellCount)].sort((a, b) => a - b))
+    const key = (e: (typeof r)[number]) => (e.elder ? 100 : 0) + e.cellCount
+    expect(r.map(key)).toEqual([...r.map(key)].sort((a, b) => a - b))
   })
 })
 
-describe('bagElements / compareEquipByCells', () => {
-  const eqOf = (cells: number, element: number) => GAME.equips.find((e) => GAME.shapeById[e.shapeId].cellCount === cells && e.element === element && e.quality < 5)!
+describe('bagElements / compareSelected', () => {
+  const eqOf = (cells: number, element: number, tier = 4) => GAME.equips.find((e) => GAME.shapeById[e.shapeId].cellCount === cells && e.element === element && e.quality < 5 && e.tier === tier)!
+  const redOf = (cells: number, skip = 0) => GAME.equips.filter((e) => e.elderId !== undefined && GAME.shapeById[e.shapeId].cellCount === cells)[skip]
+  const cellsOf = (e: { shapeId: number }) => GAME.shapeById[e.shapeId].cellCount
 
   it('无已选 → 空（即全部元素）；同元素去重；两种元素升序', () => {
     expect(bagElements(GAME, [])).toEqual([])
@@ -51,10 +60,20 @@ describe('bagElements / compareEquipByCells', () => {
     expect(bagElements(GAME, [eqOf(2, 4).id, eqOf(1, 1).id, eqOf(3, 4).id])).toEqual([1, 4])
   })
 
-  it('已选法宝按占格数升序，同格数按元素', () => {
-    const list = [eqOf(4, 1), eqOf(1, 4), eqOf(2, 2), eqOf(1, 1)]
-    const sorted = [...list].sort((a, b) => compareEquipByCells(GAME, a, b))
-    expect(sorted.map((e) => [GAME.shapeById[e.shapeId].cellCount, e.element])).toEqual([[1, 1], [1, 4], [2, 2], [4, 1]])
+  it('普通法宝：占格数升序，同格数按品阶低到高', () => {
+    const list = [eqOf(4, 1, 4), eqOf(1, 4, 3), eqOf(2, 2, 4), eqOf(1, 1, 4), eqOf(1, 2, 1)].map((eq) => ({ eq, awaken: 0 }))
+    const sorted = [...list].sort((a, b) => compareSelected(GAME, a, b))
+    expect(sorted.map((r) => [cellsOf(r.eq), r.eq.tier])).toEqual([[1, 1], [1, 3], [1, 4], [2, 4], [4, 4]])
+  })
+
+  it('红装排在全部普通法宝之后：占格数升序，同格数按觉醒未觉醒到已觉醒', () => {
+    const r4a = { eq: redOf(4, 0), awaken: 2 }
+    const r4b = { eq: redOf(4, 1), awaken: 0 }
+    const r3 = { eq: redOf(3, 0), awaken: 5 }
+    const n4 = { eq: GAME.equips.find((e) => e.quality < 5 && cellsOf(e) === 4)!, awaken: 0 } // 普通法宝最大 4 格
+    const n1 = { eq: eqOf(1, 1), awaken: 0 }
+    const sorted = [r4a, n4, r3, n1, r4b].sort((a, b) => compareSelected(GAME, a, b))
+    expect(sorted).toEqual([n1, n4, r3, r4b, r4a])
   })
 })
 

@@ -181,10 +181,14 @@ describe('SolveSettings + BoardPanel', () => {
   })
 
   it('选择弟子天赋写回设置', async () => {
-    const w = mount(SolveSettings)
+    const w = mount(SolveSettings, { attachTo: document.body })
     const id = GAME.talents.find((t) => t.name === '剑痴')!.id
-    await w.findAll('.talents select')[0].setValue(String(id))
+    const picker = w.findAll('.talent-picker')[0]
+    await picker.find('.trigger').trigger('click')
+    await picker.findAll('.form-btn').find((b) => b.text().startsWith('剑'))!.trigger('click')
+    await picker.findAll('.talent-btn').find((b) => b.text().includes('剑痴'))!.trigger('click')
     expect(useSettingsStore().talents[0]).toBe(id)
+    w.unmount()
   })
 })
 

@@ -2,21 +2,16 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { GAME } from '@/core/data'
 import { WORKER_CHOICES } from '@/core/solver/temperature'
-import { FORM_NAME, FORMS } from '@/core/types'
 import { BUDGET_CHOICES } from '@/services/persist-schema'
 import { useBagStore } from '@/stores/bag'
 import { useSettingsStore } from '@/stores/settings'
 import { useSolverStore } from '@/stores/solver'
 import ElderTag from '@/components/common/ElderTag.vue'
+import TalentPicker from './TalentPicker.vue'
 
 const settings = useSettingsStore()
 const solver = useSolverStore()
 const bag = useBagStore()
-
-const talentGroups = FORMS.filter((f) => f !== 0).map((f) => ({
-  form: f,
-  list: GAME.talents.filter((t) => t.form === f).sort((a, b) => b.value - a.value),
-})).filter((g) => g.list.length)
 
 const reds = computed(() => bag.selected.filter((it) => GAME.equipById[it.equipId]?.elderId !== undefined).map((it) => it.equipId))
 const awakenInUse = computed(() => bag.selected.some((it) => it.copies.some((c) => c.awaken > 0)))
@@ -30,8 +25,6 @@ watch(() => solver.running, (r) => {
 }, { immediate: true })
 onBeforeUnmount(() => timer && clearInterval(timer))
 const progress = computed(() => (solver.running ? Math.min(99, ((now.value - solver.startedAt) / 1000 / solver.budgetSec) * 100) : solver.result ? 100 : 0))
-
-const setTalent = (slot: number, v: string) => settings.setTalent(slot, v ? +v : null)
 </script>
 
 <template>
@@ -54,12 +47,14 @@ const setTalent = (slot: number, v: string) => settings.setTalent(slot, v ? +v :
     <div class="block">
       <div class="muted small">弟子天赋（按武器形态放大法宝基础三围）</div>
       <div class="talents">
-        <select v-for="i in 4" :key="i" :value="settings.talents[i - 1] ?? ''" :aria-label="`天赋${i}`" @change="setTalent(i - 1, ($event.target as HTMLSelectElement).value)">
-          <option value="">天赋{{ i }}：无</option>
-          <optgroup v-for="g in talentGroups" :key="g.form" :label="`${FORM_NAME[g.form]}形态`">
-            <option v-for="t in g.list" :key="t.id" :value="t.id">{{ t.name }}（{{ t.desc }}）</option>
-          </optgroup>
-        </select>
+        <TalentPicker
+          v-for="i in 4"
+          :key="i"
+          :model-value="settings.talents[i - 1] ?? null"
+          :label="`天赋${i}`"
+          :disabled-ids="settings.talents"
+          @update:model-value="settings.setTalent(i - 1, $event)"
+        />
       </div>
     </div>
 
@@ -105,7 +100,6 @@ const setTalent = (slot: number, v: string) => settings.setTalent(slot, v ? +v :
 .wrow input { width: 72px; }
 .block { display: flex; flex-direction: column; gap: 4px; }
 .talents { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
-.talents select { width: 100%; }
 .params { gap: 12px; }
 .seed { width: 80px; }
 .solve-bar { display: flex; align-items: center; gap: 10px; }

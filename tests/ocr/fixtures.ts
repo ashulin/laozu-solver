@@ -24,6 +24,18 @@ export interface Fixture {
 
 export const manifest = JSON.parse(readFileSync(join(FIXTURE_DIR, 'manifest.json'), 'utf8')) as { fixtures: Fixture[] }
 
+/** 截图用 Git LFS 管理；没装 LFS 时检出的是一小段指针文本，这类测试改为跳过 */
+const LFS_POINTER = 'version https://git-lfs'
+export function isLfsPointer(file: string): boolean {
+  const head = readFileSync(join(FIXTURE_DIR, file)).subarray(0, LFS_POINTER.length).toString('latin1')
+  return head === LFS_POINTER
+}
+const missing = manifest.fixtures.filter((f) => isLfsPointer(f.file)).map((f) => f.file)
+export const FIXTURES_AVAILABLE = missing.length === 0
+if (!FIXTURES_AVAILABLE) {
+  console.warn(`[ocr] ${missing.length} 张测试截图是 Git LFS 指针，相关测试已跳过。请先安装 Git LFS 并执行 git lfs pull。`)
+}
+
 export function loadFixture(file: string): RgbImage {
   const raw = readImage(join(FIXTURE_DIR, file))
   return fromRgba(raw.width, raw.height, raw.data)
@@ -32,7 +44,7 @@ export function loadFixture(file: string): RgbImage {
 /** 第 shard 片（共 total 片）的网格定位用例 */
 export function fitSuite(shard: number, total: number): void {
   const list = manifest.fixtures.filter((_, i) => i % total === shard)
-  describe(`网格自动定位（真实截图 ${shard + 1}/${total}）`, () => {
+  describe.skipIf(!FIXTURES_AVAILABLE)(`网格自动定位（真实截图 ${shard + 1}/${total}）`, () => {
     for (const f of list) {
       it(`${f.file}：定位成功，误差不超过格宽 3%`, () => {
         const img = loadFixture(f.file)

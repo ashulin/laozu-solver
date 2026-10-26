@@ -22,6 +22,26 @@ npm run build      # 类型检查 + 生产构建，产物在 dist/
 npm run preview    # 预览构建产物
 ```
 
+### 截图识别的测试截图（Git LFS）
+
+`tests/fixtures/ocr/` 下的截图用 Git LFS 管理，克隆前先安装 Git LFS：
+
+```bash
+git lfs install    # 每台机器执行一次
+git lfs pull       # 已经克隆过、但截图是指针文本时执行
+```
+
+没装 Git LFS 时截图是一小段指针文本，截图相关的测试会自动跳过，其它测试照常运行。
+
+新增截图直接放进该目录并提交即可，`.gitattributes` 会自动按 LFS 处理。
+
+**推送注意**：如果你的 git 配置了全局钩子目录（`core.hooksPath`），LFS 的推送钩子可能没有安装，推送时要先上传截图：
+
+```bash
+git lfs push --all origin
+git push
+```
+
 ## 游戏数据更新
 
 数据从觉醒版源码中提取，产物在 `src/core/data/raw/`：

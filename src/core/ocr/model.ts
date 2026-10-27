@@ -88,7 +88,13 @@ const decodeAll = (m: Record<string, string>) => new Map(Object.entries(m).map((
 
 /** 元素徽章字形：金木水火土雷邪体 */
 export const ELEMENT_GLYPHS = decodeAll(MODEL.templates.element)
+
 /** 形态徽章字形：剑乐异御枪刀锤幡 */
 export const FORM_GLYPHS = decodeAll(MODEL.templates.form)
+
+/** 形态字到 FORM_NAME 编号的映射 */
+export const FORM_ID: Record<string, number> = Object.fromEntries(
+  Object.entries({ 剑: 2, 乐: 3, 异: 4, 御: 5, 枪: 6, 刀: 7, 锤: 8, 幡: 9 }),
+)
 /** 右下角数字字形 */
 export const NUMBER_GLYPHS = decodeAll(MODEL.templates.number)

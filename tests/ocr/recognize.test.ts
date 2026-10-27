@@ -6,7 +6,7 @@ import { anchoredPiece, occupiedCells, validGrid } from '@/core/ocr/geometry'
 import { needsReview, rebuildCoverage, reviewRecognition, setExcluded } from '@/core/ocr/draft'
 import { detectAwaken } from '@/core/ocr/awaken'
 import glyphs from '@/core/data/raw/awaken-glyphs.json'
-import { matchArt, recognizeGrid, type RecognitionCell } from '@/core/ocr/recognize'
+import { matchArt, rankCandidates, recognizeGrid, resonanceOf, type CellAnalysis, type RecognitionCell } from '@/core/ocr/recognize'
 import { refreshConflicts, spatialConflicts } from '@/core/ocr/conflicts'
 import type { ElderConfig } from '@/core/types'
 import { FIXTURES_AVAILABLE, loadFixture, manifest } from './fixtures'
@@ -121,6 +121,59 @@ describe.skipIf(!FIXTURES_AVAILABLE)('原生图库识别真实截图（人工网
     for (const color of Object.values(MODEL.palette)) {
       expect(detectAwaken({ w: 700, h: 600, px: () => color }, { ox: 0, oy: 0, pw: 100, ph: 100 }, [0], 5)).toBeNull()
     }
+  })
+})
+
+describe('元素、形态与共鸣值证据', () => {
+  const evidence = (patch: Partial<CellAnalysis> = {}): CellAnalysis => ({
+    kind: 'unknown', anchor: true, strongAnchor: false, element: null, quality: null,
+    distances: [], qualityDistances: [], form: null, formScore: 0, number: null, numberScore: 0, numberAt: [], ...patch,
+  })
+
+  it('共鸣值按占格数与阶推导，红法宝只随占格数变化', () => {
+    const size = (id: number) => GAME.shapeById[GAME.equipById[id].shapeId].cellCount
+    const normal = GAME.equips.find((e) => e.elderId === undefined && size(e.id) === 3)!
+    const one = GAME.equips.find((e) => e.elderId === undefined && size(e.id) === 1)!
+    expect(resonanceOf(normal.id)).toBe(8 * 4 * 2 ** (normal.tier - 4))
+    expect(resonanceOf(one.id)).toBe(8 * 2 * 2 ** (one.tier - 4))
+    // 四阶基准：1格16、2格24、3格32、4格40
+    for (const [cells, value] of [[1, 16], [2, 24], [3, 32], [4, 40]]) {
+      const eq = GAME.equips.find((e) => e.elderId === undefined && e.tier === 4 && size(e.id) === cells)!
+      expect(resonanceOf(eq.id), `${cells}格四阶`).toBe(value)
+    }
+    const reds = GAME.equips.filter((e) => e.elderId !== undefined)
+    expect(new Set(reds.map((e) => size(e.id))).size).toBeGreaterThan(1)
+    for (const e of reds) expect(resonanceOf(e.id), `${e.name} 觉醒无关`).toBe({ 3: 32, 4: 56, 5: 64 }[size(e.id)])
+  })
+
+  it('共鸣值与形态命中时同类证据一致，读错则退回全量', () => {
+    const fixture = manifest.fixtures.find((f) => f.file === 'outgame-earth-04.jpg')!
+    const image = loadFixture(fixture.file)
+    const g = { ox: fixture.grid.ox, oy: fixture.grid.oy, pw: fixture.grid.pitch, ph: fixture.grid.pitch }
+    const all = rankCandidates(image, g, 0, evidence({}))
+    expect(all.length).toBeGreaterThan(1)
+    const top = all[0]
+    const reson = resonanceOf(top.equipId)!
+    // 右下标落在最下最右占格，按该偏移写入读数
+    const cells = GAME.shapeById[GAME.equipById[top.equipId].shapeId].cells
+    const first = [...cells].sort((a, b) => a[0] - b[0] || a[1] - b[1])[0]
+    const last = [...cells].sort((a, b) => b[0] - a[0] || b[1] - a[1])[0]
+    const numberAt: { value: number; score: number }[][] = []
+    numberAt[last[0] - first[0]] = []
+    numberAt[last[0] - first[0]][last[1] - first[1]] = { value: reson, score: 0.8 }
+    const hit = rankCandidates(image, g, 0, evidence({ numberAt }))
+    expect(hit.length).toBeGreaterThan(0)
+    expect(hit.every((c) => resonanceOf(c.equipId) === reson)).toBe(true)
+    expect(hit[0].equipId).toBe(top.equipId)
+
+    const form = GAME.equipById[top.equipId].weaponForm
+    const byForm = rankCandidates(image, g, 0, evidence({ form }))
+    expect(byForm.length).toBeGreaterThan(0)
+    expect(byForm.every((c) => GAME.equipById[c.equipId].weaponForm === form)).toBe(true)
+
+    // 与所有候选都不符的共鸣值不能把候选清空
+    const bogus = rankCandidates(image, g, 0, evidence({ number: 7 }))
+    expect(bogus.map((c) => c.equipId)).toEqual(all.map((c) => c.equipId))
   })
 })
 

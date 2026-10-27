@@ -22,6 +22,7 @@ const templates = entries.flatMap((entry) => {
       const fy = oy + y / 256
       if (!shape.cells.some(([r, c]) => Math.floor(fx) === c && Math.floor(fy) === r)) continue
       const px = fx % 1, py = fy % 1
+      // 跳过左上元素/形态标与右下共鸣数字，这些叠加物在原生图里不存在
       if (px < 0.30 && py < 0.48 || px > 0.70 && py > 0.64) continue
       let r = 0, g = 0, b = 0, a = 0
       for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {

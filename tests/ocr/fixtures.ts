@@ -5,7 +5,9 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { GAME } from '@/core/data'
 import { FRAME_MIN, fitGrid } from '@/core/ocr/fit'
+import { recognizeGrid } from '@/core/ocr/recognize'
 import { cellBackground, fromRgba, type RgbImage } from '@/core/ocr/sampling'
 import { readImage } from '../../scripts/image-io'
 
@@ -19,6 +21,7 @@ export interface Fixture {
   elements: number[]
   empty: [number, number][]
   locked: [number, number][]
+  reds: { name: string; anchor: [number, number]; awaken: number }[]
   labeled: boolean
 }
 
@@ -57,6 +60,13 @@ export function fitSuite(shard: number, total: number): void {
         expect(Math.abs(fit.grid.oy - f.grid.oy), 'oy').toBeLessThan(tol)
         expect(Math.abs(fit.grid.pw - f.grid.pitch), 'pitch').toBeLessThan(tol)
         expect(fit.grid.pw).toBe(fit.grid.ph)
+        const recognized = recognizeGrid(img, fit.grid)
+        expect(recognized.cells).toHaveLength(42)
+        for (const red of f.reds) {
+          const cell = recognized.cells[red.anchor[0] * 7 + red.anchor[1]]
+          expect(GAME.equipById[cell.equipId!]?.name, `${red.anchor} 自动定位后的红装`).toBe(red.name)
+          expect(cell.awaken).toBe(cell.awakenDetected ? red.awaken : 0)
+        }
 
         // 标注的空格底色应接近调色板里的「空格」色
         for (const [r, c] of f.empty) {

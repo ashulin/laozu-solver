@@ -1,6 +1,8 @@
 /** 背包：已选法宝（红装逐副本觉醒）/ 未开放格 / 之前摆盘 */
 import { defineStore } from 'pinia'
 import { GAME } from '@/core/data'
+import { reviewRecognition } from '@/core/ocr/draft'
+import type { RecognitionCell } from '@/core/ocr/recognize'
 import { checkRedEquips, MAX_RED_KINDS, maxRedCopies, redItemsOf } from '@/core/solver/red-rules'
 import type { SavedPiece, SelectedItem } from '@/core/types'
 import { appStore } from '@/services/app-storage'
@@ -22,6 +24,12 @@ export const useBagStore = defineStore('bag', {
     },
   },
   actions: {
+    importRecognition(cells: RecognitionCell[], skipPending = false): AddResult {
+      const review = reviewRecognition(cells, useEldersStore().configMap, { skipPending })
+      if (!review.data) return { ok: false, reason: review.errors.join('；') }
+      this.$patch(review.data)
+      return { ok: true }
+    },
     /** 添加副本。红装：须已拥有、不超过可携带数量、种类不超过 2；新副本觉醒默认取长老上限 */
     add(equipId: number, count = 1): AddResult {
       const eq = GAME.equipById[equipId]

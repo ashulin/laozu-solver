@@ -9,7 +9,7 @@ import { computed, ref } from 'vue'
 import { GAME, scoringData } from '@/core/data'
 import { evaluate, objective } from '@/core/solver/evaluate'
 import { scoreLayout } from '@/core/solver/layout-score'
-import type { ElementId, EvaluatedPiece, SavedPiece, Tier } from '@/core/types'
+import type { ElementId, EvaluatedPiece, SavedPiece, Tier, WeaponForm } from '@/core/types'
 import { useBagStore } from '@/stores/bag'
 import { useBoardsStore } from '@/stores/boards'
 import { useEldersStore } from '@/stores/elders'
@@ -22,6 +22,7 @@ export interface BoardPiece {
   name: string
   tier: Tier
   element: ElementId
+  weaponForm: WeaponForm
   awaken: number
   cells: number[]
   detail?: EvaluatedPiece
@@ -52,7 +53,7 @@ export function useBoardView() {
     const s = scoreLayout(pieces, ctxInput(), GAME)
     return {
       pieces: s.placements.map((p, i) => ({
-        key: `s${i}`, equipId: p.eq.id, name: p.eq.name, tier: p.tier, element: p.eq.element,
+        key: `s${i}`, equipId: p.eq.id, name: p.eq.name, tier: p.tier, element: p.eq.element, weaponForm: p.eq.weaponForm,
         awaken: p.inst.awaken, cells: p.cells, detail: s.evaluation.pieces[i],
       })),
       score: s.score,
@@ -69,7 +70,7 @@ export function useBoardView() {
     const ev = evaluate(pl, solver.run.ctx, scoringData(), true)
     return {
       pieces: pl.map((p, i) => ({
-        key: `u${p.inst.uid}`, equipId: p.eq.id, name: p.eq.name, tier: p.tier, element: p.eq.element,
+        key: `u${p.inst.uid}`, equipId: p.eq.id, name: p.eq.name, tier: p.tier, element: p.eq.element, weaponForm: p.eq.weaponForm,
         awaken: p.inst.awaken, cells: p.cells, detail: ev.pieces[i],
       })),
       score: objective(ev, solver.run.ctx.target),

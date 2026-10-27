@@ -7,13 +7,16 @@ import { useBagStore } from '@/stores/bag'
 import { useSettingsStore } from '@/stores/settings'
 import { useSolverStore } from '@/stores/solver'
 import ElderTag from '@/components/common/ElderTag.vue'
+import ElderCard from '@/components/elders/ElderCard.vue'
+import { useEldersStore } from '@/stores/elders'
 import TalentPicker from './TalentPicker.vue'
 
 const settings = useSettingsStore()
 const solver = useSolverStore()
 const bag = useBagStore()
+const elders = useEldersStore()
 
-const reds = computed(() => bag.selected.filter((it) => GAME.equipById[it.equipId]?.elderId !== undefined).map((it) => it.equipId))
+const involvedElders = computed(() => elders.views.filter((v) => bag.selected.some((it) => it.equipId === v.redEquip.id)))
 const awakenInUse = computed(() => bag.selected.some((it) => it.copies.some((c) => c.awaken > 0)))
 
 // 进度条按时间推进
@@ -58,9 +61,18 @@ const progress = computed(() => (solver.running ? Math.min(99, ((now.value - sol
       </div>
     </div>
 
-    <div v-if="reds.length" class="block">
-      <div class="muted small">涉及长老（在「长老管理」中修改）</div>
-      <div class="row"><ElderTag v-for="id in reds" :key="id" :equip-id="id" /></div>
+    <div v-if="involvedElders.length" class="block involved-elders">
+      <div class="muted small">涉及长老 · 点击直接修改</div>
+      <div class="elder-editors">
+        <details v-for="view in involvedElders" :key="view.elder.id" class="elder-editor">
+          <summary :aria-label="`修改长老${view.elder.name}`"><ElderTag :equip-id="view.redEquip.id" /><span class="edit-label small">修改</span></summary>
+          <div class="elder-editor-body">
+            <p class="muted small">修改立即保存至当前账号，与「长老管理」同步。</p>
+            <ElderCard :view="view" />
+          </div>
+        </details>
+      </div>
+      <p v-if="solver.running" class="muted small elder-note">当前求解使用启动时的配置；修改后请重新求解。</p>
     </div>
 
     <div class="row params">
@@ -100,6 +112,18 @@ const progress = computed(() => (solver.running ? Math.min(99, ((now.value - sol
 .wrow input { width: 72px; }
 .block { display: flex; flex-direction: column; gap: 4px; }
 .talents { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.elder-editors { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.elder-editor { min-width: 0; max-width: 100%; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-elev); }
+.elder-editor[open] { flex-basis: 100%; }
+.elder-editor summary { display: flex; align-items: center; gap: 8px; padding: 7px 9px; cursor: pointer; list-style: none; border-radius: 9px; }
+.elder-editor summary::-webkit-details-marker { display: none; }
+.elder-editor summary:hover, .elder-editor summary:focus-visible { background: var(--gold-weak); outline: 1px solid var(--gold); }
+.edit-label { color: var(--gold); margin-left: auto; white-space: nowrap; }
+.edit-label::after { content: ' ▾'; }
+.elder-editor[open] .edit-label::after { content: ' ▴'; }
+.elder-editor-body { padding: 0 8px 8px; }
+.elder-editor-body p { margin: 2px 2px 8px; }
+.elder-note { margin: 4px 0 0; }
 .params { gap: 12px; }
 .seed { width: 80px; }
 .solve-bar { display: flex; align-items: center; gap: 10px; }

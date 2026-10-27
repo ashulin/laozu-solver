@@ -34,7 +34,7 @@ export const useSolverStore = defineStore('solver', {
     milestones: [] as Milestone[],
     replayIndex: null as number | null, // null = 显示最新
     log: [] as string[],
-    boardMode: 'edit' as BoardMode,
+    boardMode: (useBagStore().previousLayout ? 'current' : 'edit') as BoardMode,
     run: null as RunContext | null,
     handle: null as SolveHandle | null,
     error: null as string | null,

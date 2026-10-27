@@ -16,7 +16,7 @@ const PANEL_WIDTH = 420
 
 const root = ref<HTMLElement | null>(null)
 const open = ref(false)
-const alignRight = ref(false)
+const panelStyle = ref<Record<string, string>>({})
 const activeForm = ref<WeaponForm>(groups[0].form)
 
 const current = computed(() => (model.value === null ? null : (GAME.talentById[model.value] ?? null)))
@@ -24,11 +24,23 @@ const activeGroup = computed(() => groups.find((g) => g.form === activeForm.valu
 const taken = computed(() => new Set(props.disabledIds.filter((x): x is number => x !== null && x !== model.value)))
 const pct = (v: number) => `+${v / 100}%`
 
+/** 面板按实际宽度夹紧在视口内；窄屏不允许右对齐把左侧推出屏幕 */
+function place() {
+  const rect = root.value?.getBoundingClientRect()
+  if (!rect) return
+  const vw = window.innerWidth, vh = window.innerHeight
+  const width = Math.min(PANEL_WIDTH, vw * 0.92)
+  const height = Math.min(320, vh - 16)
+  const left = Math.max(8, Math.min(rect.left, vw - width - 8))
+  let top = rect.bottom + 4
+  if (top + height > vh - 8) top = Math.max(8, rect.top - 4 - height)
+  panelStyle.value = { position: 'fixed', left: `${left}px`, top: `${top}px`, width: `${width}px`, maxHeight: `${height}px` }
+}
+
 function toggle() {
   if (open.value) return close()
   if (current.value) activeForm.value = current.value.form
-  const rect = root.value?.getBoundingClientRect()
-  alignRight.value = !!rect && rect.left + PANEL_WIDTH > window.innerWidth - 8
+  place()
   open.value = true
   nextTick(() => root.value?.querySelector<HTMLElement>('.forms .on')?.focus())
 }
@@ -50,11 +62,25 @@ function onKey(e: KeyboardEvent) {
     pick(model.value)
   }
 }
+function onViewport() {
+  if (open.value) place()
+}
 watch(open, (o) => {
-  if (o) document.addEventListener('pointerdown', onDocPointer, true)
-  else document.removeEventListener('pointerdown', onDocPointer, true)
+  if (o) {
+    document.addEventListener('pointerdown', onDocPointer, true)
+    window.addEventListener('resize', onViewport)
+    window.addEventListener('scroll', onViewport, true)
+  } else {
+    document.removeEventListener('pointerdown', onDocPointer, true)
+    window.removeEventListener('resize', onViewport)
+    window.removeEventListener('scroll', onViewport, true)
+  }
 })
-onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointer, true))
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocPointer, true)
+  window.removeEventListener('resize', onViewport)
+  window.removeEventListener('scroll', onViewport, true)
+})
 </script>
 
 <template>
@@ -78,7 +104,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointer, 
       <span class="caret" aria-hidden="true">▾</span>
     </button>
 
-    <div v-if="open" class="panel" :class="{ right: alignRight }" role="dialog" :aria-label="`选择${label}`">
+    <div v-if="open" class="panel" :style="panelStyle" role="dialog" :aria-label="`选择${label}`">
       <ul class="forms" role="listbox" aria-label="武器形态">
         <li>
           <button type="button" class="form-btn none" :class="{ sel: !current }" @click="pick(null)">无</button>
@@ -140,12 +166,8 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointer, 
 .caret { color: var(--text-dim); font-size: 11px; }
 
 .panel {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 30;
-  width: min(420px, 92vw);
-  max-height: 320px;
+  position: fixed;
+  z-index: 40;
   display: grid;
   grid-template-columns: 76px 1fr;
   background: var(--bg-elev);
@@ -154,7 +176,6 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointer, 
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
   overflow: hidden;
 }
-.panel.right { left: auto; right: 0; }
 ul { list-style: none; margin: 0; padding: 4px; overflow: auto; }
 .forms { border-right: 1px solid var(--line); background: var(--bg-panel); }
 .form-btn, .talent-btn { width: 100%; border: 0; background: transparent; text-align: left; border-radius: 6px; }

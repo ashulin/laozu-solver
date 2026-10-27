@@ -51,6 +51,20 @@ describe('TalentPicker', () => {
     expect(forms.slice(1)).toEqual(['剑5', '乐3', '异5', '御7', '枪9', '刀3', '锤5', '幡3'])
   })
 
+  it('面板按视口宽度夹紧，窄屏不会把左侧推出屏幕', async () => {
+    const { w } = mk(null)
+    const original = window.innerWidth
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 })
+    await w.find('.trigger').trigger('click')
+    const style = w.find('.panel').attributes('style') ?? ''
+    expect(style).toContain('position: fixed')
+    // 面板宽度取 min(420, 92vw)，且 left 不小于 8px
+    expect(style).toContain('width: 294.4px')
+    expect(style).toMatch(/left: 8px/)
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: original })
+    await w.find('.trigger').trigger('click')
+  })
+
   it('二级只列当前形态的天赋；切换形态后列表跟着变', async () => {
     const { w } = mk(null)
     await w.find('.trigger').trigger('click')

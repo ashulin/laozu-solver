@@ -1,3 +1,4 @@
+import type { OcrSample } from '@/core/ocr/learn'
 import type { Grid } from '@/core/ocr/sampling'
 import type { RecognizeJob, RecognizeMessage } from '@/workers/recognize.worker'
 
@@ -76,7 +77,7 @@ export async function decodeScreenshot(file: File): Promise<ImageData> {
   }
 }
 
-export function runRecognition(image: ImageData, grid: Grid | undefined, signal: AbortSignal, progress: (message: string) => void) {
+export function runRecognition(image: ImageData, grid: Grid | undefined, signal: AbortSignal, progress: (message: string) => void, samples: OcrSample[] = []) {
   return new Promise<Extract<RecognizeMessage, { type: 'done' }>>((resolve, reject) => {
     if (signal.aborted) { reject(new DOMException('已取消', 'AbortError')); return }
     const worker = new Worker(new URL('../workers/recognize.worker.ts', import.meta.url), { type: 'module' })
@@ -93,7 +94,9 @@ export function runRecognition(image: ImageData, grid: Grid | undefined, signal:
     worker.onerror = () => fail(new Error('识别模块加载失败，请刷新重试；当前背包没有改动'))
     worker.onmessageerror = () => fail(new Error('无法读取识别结果，请重试'))
     const pixels = new Uint8ClampedArray(image.data)
-    const job: RecognizeJob = { w: image.width, h: image.height, pixels, grid }
+    // 样本可能来自 Vue 的响应式对象，Proxy 无法被结构化克隆，先转成纯数据
+    const plainSamples: OcrSample[] = samples.map((s) => ({ equipId: s.equipId, points: Array.from(s.points), createdAt: s.createdAt }))
+    const job: RecognizeJob = { w: image.width, h: image.height, pixels, grid, samples: plainSamples }
     try { worker.postMessage(job, [pixels.buffer]) } catch (error) { fail(error instanceof Error ? error : new Error('无法启动识别')) }
   })
 }

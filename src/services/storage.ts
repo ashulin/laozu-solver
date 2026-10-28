@@ -5,9 +5,10 @@
 import type { GameData } from '@/core/data'
 import { DATA_VERSION_TAG } from '@/core/data/version'
 import type { Persisted, SavedBoard } from '@/core/types'
+import type { OcrSamplesData } from '@/core/ocr/learn'
 import {
   type BagData, type EldersData, type SettingsData, ValidationError,
-  validateBag, validateElders, validateSavedBoards, validateSettings,
+  validateBag, validateElders, validateOcrSamples, validateSavedBoards, validateSettings,
 } from './persist-schema'
 
 export interface StorageLike {
@@ -22,6 +23,7 @@ export const KEYS = {
   bag: 'laozu-next:bag',
   settings: 'laozu-next:settings',
   savedBoards: 'laozu-next:saved-boards',
+  ocrSamples: 'laozu-next:ocr-samples',
 } as const
 export type SectionName = keyof typeof KEYS
 
@@ -30,6 +32,7 @@ export interface Sections {
   bag: BagData
   settings: SettingsData
   savedBoards: SavedBoard[]
+  ocrSamples: OcrSamplesData
 }
 
 const VALIDATORS: { [K in SectionName]: (v: unknown, game: GameData) => Sections[K] } = {
@@ -37,6 +40,7 @@ const VALIDATORS: { [K in SectionName]: (v: unknown, game: GameData) => Sections
   bag: validateBag,
   settings: validateSettings,
   savedBoards: validateSavedBoards,
+  ocrSamples: validateOcrSamples,
 }
 
 export const SECTION_LABEL: Record<SectionName, string> = {
@@ -44,6 +48,7 @@ export const SECTION_LABEL: Record<SectionName, string> = {
   bag: '已选法宝',
   settings: '求解设置',
   savedBoards: '收藏摆盘',
+  ocrSamples: '识图学习样本',
 }
 
 /* ---------------- 本地读写 ---------------- */

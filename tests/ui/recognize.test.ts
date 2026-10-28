@@ -7,7 +7,7 @@ import ReviewEquipPicker from '@/components/recognize/ReviewEquipPicker.vue'
 import { useSolverStore } from '@/stores/solver'
 import { GAME } from '@/core/data'
 import { decodeScreenshot, runRecognition } from '@/services/recognition'
-import { memoryStorage, setStorageBackend } from '@/services/app-storage'
+import { appStore, memoryStorage, setStorageBackend } from '@/services/app-storage'
 import { useBagStore } from '@/stores/bag'
 import { enableAutoPersist } from '@/stores/persist'
 import type { RecognitionCell } from '@/core/ocr/recognize'
@@ -224,6 +224,29 @@ describe('截图识别页', () => {
     expect(w.find('.current-label').text()).toContain('分金刀')
     expect(w.find('.current-label').text()).not.toContain('占用格')
   })
+  it('「记住这个样子」写入本地存储并标记该格已确认；可整体清除', async () => {
+    const w = create()
+    await upload(w)
+    expect(appStore().load('ocrSamples')).toBeNull()
+    await w.findAll('button').find((b) => b.text() === '记住这个样子')!.trigger('click')
+    await flushPromises()
+    const saved = appStore().load('ocrSamples')
+    expect(saved?.samples).toHaveLength(1)
+    expect(saved?.samples[0].equipId).toBe(110101)
+    expect(w.text()).toContain('已记住')
+
+    // 再次识别时会带上学习样本
+    await w.findAll('button').find((b) => b.text() === '自动重新识别')!.trigger('click')
+    await flushPromises()
+    const job = vi.mocked(runRecognition).mock.calls.at(-1)
+    expect(job?.[4]?.length).toBe(1)
+
+    await w.findAll('button').find((b) => b.text() === '清除学习记录')!.trigger('click')
+    await flushPromises()
+    expect(appStore().load('ocrSamples')).toBeNull()
+    expect(w.text()).toContain('已清除全部学习记录')
+  })
+
   it('未确认的红装导入失败，不产生部分写入', () => {
     const bag = useBagStore(); bag.add(110101)
     const before = JSON.stringify(bag.$state)

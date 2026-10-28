@@ -4,9 +4,11 @@ import { GAME } from '@/core/data'
 import { ELEMENT_NAME, TIER_NAME } from '@/core/types'
 import { occupiedCells, validGrid } from '@/core/ocr/geometry'
 import { needsReview, rebuildCoverage, reviewRecognition, setExcluded } from '@/core/ocr/draft'
+import { extractSample, mergeSample, sampleDrift, type OcrSample } from '@/core/ocr/learn'
 import type { RecognitionCell } from '@/core/ocr/recognize'
-import type { Grid } from '@/core/ocr/sampling'
+import { fromRgba, type Grid } from '@/core/ocr/sampling'
 import { decodeScreenshot, runRecognition } from '@/services/recognition'
+import { appStore } from '@/services/app-storage'
 import { useBagStore } from '@/stores/bag'
 import { useEldersStore } from '@/stores/elders'
 import ElderCard from '@/components/elders/ElderCard.vue'
@@ -33,6 +35,10 @@ const activeIndex = ref(0)
 const skipPending = ref(false)
 const listMode = ref<ReviewFilter>('pending')
 const mobileView = ref<'original' | 'recognized'>('recognized')
+// 用户教过的样子：本次会话与下次打开都会参与识别
+const samples = ref<OcrSample[]>(appStore().load('ocrSamples')?.samples ?? [])
+const learnNote = ref('')
+const learnedEquips = computed(() => new Set(samples.value.map((s) => s.equipId)).size)
 const overlapCell = ref<number | null>(null)
 const editor = ref<HTMLFieldSetElement>()
 const footprints = computed(() => reviewFootprints(cells.value, skipPending.value))
@@ -106,6 +112,40 @@ async function load(file?: File) {
     if (token === revision) busy.value = false
   }
 }
+/** 记住当前这一格：把用户确认的样子存下来，之后同类截图直接采信 */
+function remember() {
+  const img = image.value, g = grid.value, cell = active.value
+  if (!img || !g || !cell || cell.kind !== 'piece' || !cell.equipId) {
+    learnNote.value = '请先选中一件已确认的法宝'
+    return
+  }
+  const sample = extractSample(fromRgba(img.width, img.height, img.data), g, cell.row, cell.col, cell.equipId)
+  if (!sample) {
+    learnNote.value = '这一格取不到足够的图案，请重新识别后再试'
+    return
+  }
+  const merged = mergeSample(samples.value, sample)
+  if (!merged.added) {
+    learnNote.value = '已经记住过这个样子了'
+    return
+  }
+  samples.value = merged.samples
+  appStore().save('ocrSamples', { samples: merged.samples })
+  // 用户亲手确认过，这一格不再算待核对
+  cell.confirmed = true
+  cell.manuallyConfirmed = true
+  cell.reason = '已按你的选择记住'
+  learnNote.value = sampleDrift(sample) > 45
+    ? '已记住（这一格与内置图案差异较大，之后以你教的样子为准）'
+    : '已记住，之后同类截图会直接匹配'
+}
+
+function clearSamples() {
+  appStore().remove('ocrSamples')
+  samples.value = []
+  learnNote.value = '已清除全部学习记录'
+}
+
 async function recognize(manual = false) {
   if (!image.value) return
   controller?.abort()
@@ -115,7 +155,7 @@ async function recognize(manual = false) {
   busy.value = true; error.value = ''; cells.value = []; accepted.value = false; imported.value = false
   framing.value = false; corner.value = null
   try {
-    const output = await runRecognition(image.value, manual && grid.value ? { ...grid.value } : undefined, run.signal, (s) => { status.value = s })
+    const output = await runRecognition(image.value, manual && grid.value ? { ...grid.value } : undefined, run.signal, (s) => { status.value = s }, samples.value)
     if (token !== revision) return
     grid.value = output.grid
     if (!output.result) { mobileView.value = 'original'; error.value = '未能可靠定位背包，请在截图上手动框选后识别'; return }
@@ -354,6 +394,12 @@ onBeforeUnmount(() => { cancel(); window.removeEventListener('paste', paste) })
                 <label v-if="active.kind !== 'unknown' && !active.excluded" class="row"><input :checked="active.manuallyConfirmed ?? false" type="checkbox" @change="active.manuallyConfirmed = ($event.target as HTMLInputElement).checked; active.confirmed = active.manuallyConfirmed" />已核对此项</label>
                 <button v-if="active.kind === 'piece'" class="small" :class="active.excluded ? 'ok' : 'danger'" @click="toggleExcluded">{{ active.excluded ? '恢复此法宝' : '删除此法宝' }}</button>
                 <p v-if="active.excluded" class="muted small">此份法宝已删除，不会导入。可随时恢复。</p>
+                <button v-if="active.kind === 'piece' && !active.excluded" class="small" @click="remember">记住这个样子</button>
+                <p v-if="learnNote" class="small ok">{{ learnNote }}</p>
+                <div class="row learn-bar">
+                  <span class="muted small">已记住 {{ samples.length }} 条 · {{ learnedEquips }} 件法宝</span>
+                  <button class="small ghost" :disabled="!samples.length" @click="clearSamples">清除学习记录</button>
+                </div>
               </div>
             </div>
             <ul v-if="active.conflicts?.length" class="warn small conflict-list"><li v-for="message in active.conflicts" :key="message">{{ message }}</li></ul>
@@ -403,6 +449,7 @@ fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 12px; 
 summary { cursor: pointer; color: var(--gold); padding: 8px 0; }.grid-fields { display: flex; flex-wrap: wrap; gap: 8px; }.grid-fields label { width: 80px; font-size: 12px; }.grid-fields input { width: 100%; }.account-settings { margin: 12px 0; }.account-settings :deep(.elder-card) { margin-bottom: 8px; }.import-box { border-top: 1px solid var(--line); padding-top: 14px; }.import-box > label { margin: 12px 0; font-size: 12px; }.import-box p:last-child { margin-top: 10px; }.import-box a { color: var(--gold); }.import-box ul { padding-left: 20px; margin: 0 0 8px; }
 .review-tabs { margin: 10px 0; gap: 6px; }
 .cell-actions { margin: 10px 0; }
+.learn-bar { gap: 8px; margin-top: 6px; }
 .empty-state { padding: 30px; }.empty-state ol { display: flex; flex-wrap: wrap; gap: 20px 45px; padding-left: 20px; color: var(--gold); }
 @media (min-width: 801px) { .editor-content { gap: 20px; }.thumb { width: 150px; }.editor-controls { max-width: 640px; } }
 @media (max-width: 800px) {

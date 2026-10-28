@@ -1,8 +1,9 @@
 import { fitGrid } from '@/core/ocr/fit'
+import type { OcrSample } from '@/core/ocr/learn'
 import { recognizeGrid, type RecognitionResult } from '@/core/ocr/recognize'
 import { fromRgba, type Grid } from '@/core/ocr/sampling'
 
-export interface RecognizeJob { w: number; h: number; pixels: Uint8ClampedArray; grid?: Grid }
+export interface RecognizeJob { w: number; h: number; pixels: Uint8ClampedArray; grid?: Grid; samples?: OcrSample[] }
 export type RecognizeMessage =
   | { type: 'progress'; message: string }
   | { type: 'done'; grid: Grid; result: RecognitionResult | null }
@@ -21,7 +22,7 @@ self.onmessage = (event: MessageEvent<RecognizeJob>) => {
       if (!fit.converged) { send({ type: 'done', grid, result: null }); return }
     }
     send({ type: 'progress', message: '正在匹配法宝图案、品阶与占格…' })
-    send({ type: 'done', grid, result: recognizeGrid(image, grid) })
+    send({ type: 'done', grid, result: recognizeGrid(image, grid, event.data.samples ?? []) })
   } catch (error) {
     send({ type: 'error', message: error instanceof Error ? error.message : '识别失败，请重试或手动调整网格' })
   }

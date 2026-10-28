@@ -3,6 +3,7 @@
  * 原则：只信任通过校验的字段；逐字段重建对象，未知字段丢弃；任何一处非法则整段拒绝。
  */
 import type { GameData } from '@/core/data'
+import { MAX_SAMPLES, MAX_SAMPLES_PER_EQUIP, isValidSample, type OcrSample, type OcrSamplesData } from '@/core/ocr/learn'
 import { maxAwakenCap } from '@/core/solver/red-rules'
 import { WORKER_CHOICES } from '@/core/solver/temperature'
 import { CELL_COUNTS, COLS, ELEMENTS, FORMS, ROWS, TIERS } from '@/core/types'
@@ -165,6 +166,30 @@ export function validateSettings(v: unknown, game: GameData): SettingsData {
     fillAll: bool(r.fillAll, 'settings.fillAll'),
     catalogFilters: validateFilters(r.catalogFilters),
   }
+}
+
+/**
+ * 识图学习样本：非法或重复的条目直接丢弃（样本是增量积累的，丢几条不影响使用），
+ * 但仍按装备数量封顶，避免备份无限膨胀。
+ */
+export function validateOcrSamples(v: unknown, _game: GameData): OcrSamplesData {
+  if (!isObj(v)) fail('ocrSamples', '应为对象')
+  const r = v as Record<string, unknown>
+  const perEquip = new Map<number, number>()
+  const samples: OcrSample[] = []
+  for (const raw of arr(r.samples, 'ocrSamples.samples', MAX_SAMPLES)) {
+    if (!isValidSample(raw)) continue
+    const s = raw as OcrSample
+    const used = perEquip.get(s.equipId) ?? 0
+    if (used >= MAX_SAMPLES_PER_EQUIP) continue
+    perEquip.set(s.equipId, used + 1)
+    samples.push({
+      equipId: s.equipId,
+      points: s.points.map((p) => Math.round(p)),
+      createdAt: typeof s.createdAt === 'string' ? s.createdAt.slice(0, 40) : '',
+    })
+  }
+  return { samples }
 }
 
 export function validateSavedBoards(v: unknown, game: GameData): SavedBoard[] {

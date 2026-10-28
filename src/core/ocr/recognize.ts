@@ -5,6 +5,7 @@ import type { Equip } from '../types'
 import { anchoredPiece, occupiedCells, validGrid } from './geometry'
 import { detectAwaken } from './awaken'
 import type { OcrSample } from './learn'
+import { legacyCandidates } from './legacy'
 import { refreshConflicts } from './conflicts'
 import { ELEMENT_GLYPHS, FORM_GLYPHS, FORM_ID, GEO, MODEL, NUMBER_GLYPHS, TH } from './model'
 import { bestCorrelation, cellBackground, colorDistance, darkRatio, inBounds, type Grid, type RgbImage } from './sampling'
@@ -259,7 +260,11 @@ export function recognizeGrid(img: RgbImage, grid: Grid, samples: OcrSample[] = 
     if (!preferred || preferred.distance > 35) {
       cell.kind = 'unknown'
       cell.confirmed = false
-      cell.reason = '没有可靠匹配，请手动选择'
+      // 自己匹配不出结果时，用旧版签名给出可选项，供人工挑选（不据此确认）
+      // 元素标可能也读错，过滤后为空就放开元素再找一遍
+      const picked = legacyCandidates(img, grid, cell.row, cell.col, data.element)
+      cell.candidates = picked.length ? picked : legacyCandidates(img, grid, cell.row, cell.col, null)
+      cell.reason = cell.candidates.length ? '没有可靠匹配，以下是旧版识图给出的近似候选' : '没有可靠匹配，请手动选择'
       continue
     }
     // 同件法宝的不同阶之间以图案为准；不同法宝之间（红装特效常干扰图案）仍保留底色纠正
@@ -269,7 +274,15 @@ export function recognizeGrid(img: RgbImage, grid: Grid, samples: OcrSample[] = 
     const candidates = tierOnly ? plain : ranked
     const top = tierOnly ? plainTop : preferred
     cell.candidates = candidates.slice(0, 5)
-    void learned
+    // 候选太少时补充旧版给出的近似项，方便人工挑选
+    if (cell.candidates.length < 3 && !learned.has(top.equipId)) {
+      const seen = new Set(cell.candidates.map((c) => c.equipId))
+      for (const extra of legacyCandidates(img, grid, cell.row, cell.col, data.element)) {
+        if (seen.has(extra.equipId) || cell.candidates.length >= 5) continue
+        seen.add(extra.equipId)
+        cell.candidates.push(extra)
+      }
+    }
     cell.kind = 'piece'
     cell.equipId = top.equipId
     const eq = GAME.equipById[top.equipId]

@@ -4,6 +4,7 @@
  */
 import rawDbJson from './raw/game-db.json'
 import rawElderMapJson from './raw/elder-map.json'
+import rawElderAliasesJson from './raw/elder-aliases.json'
 import rawAwakenJson from './raw/awaken-db.json'
 import type {
   AttrDef, AwakenDB, Elder, ElementId, Equip, ScoringData, Shape, Skill, Talent, Tier, WeaponForm,
@@ -38,6 +39,8 @@ export interface GameData {
   awakenDb: AwakenDB
 }
 
+const aliases: Record<string, string> = (rawElderAliasesJson as { aliases?: Record<string, string> }).aliases ?? {}
+
 export function buildGameData(db: RawGameDb, elderMap: RawElderMap, awaken: RawAwakenDb): GameData {
   const attrs: AttrDef[] = db.attrs.map(([id, name, kind, nPower]) => ({ id, name, kind: kind as 1 | 2, nPower }))
   const skillById: Record<number, Skill> = {}
@@ -55,6 +58,7 @@ export function buildGameData(db: RawGameDb, elderMap: RawElderMap, awaken: RawA
   const elders: Elder[] = Object.entries(elderMap).map(([equipId, e]) => ({
     id: e.id,
     name: e.name,
+    alias: aliases[e.id] ?? undefined,
     quality: e.quality as Elder['quality'],
     redEquipId: +equipId,
     starBonus: e.starBonus,

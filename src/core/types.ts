@@ -98,6 +98,7 @@ export type AwakenDB = Record<number, AwakenEntry> // key: equipId；无条目 =
 export interface Elder {
   id: number
   name: string
+  alias?: string // 摆盘等窄空间的显示简称（由玩家指定）
   quality: ElderQuality // 品级：4优品 3良品 2凡品
   redEquipId: number
   starBonus: [number, number][] // [星级阈值, 基础三围加成 /10000]

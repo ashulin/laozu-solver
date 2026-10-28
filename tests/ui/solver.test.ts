@@ -108,6 +108,39 @@ describe('BoardGrid', () => {
     expect(cells[41].classes()).toContain('locked')
   })
 
+  it('红装在锚点格显示长老名，觉醒角标落在最下最右格', () => {
+    const eq = GAME.equipById[swk.redEquipId]
+    const shape = GAME.shapeById[eq.shapeId]
+    const first = [...shape.cells].sort((a, b) => a[0] - b[0] || a[1] - b[1])[0]
+    const cells = shape.cells.map(([r, c]) => (r - first[0]) * 7 + (c - first[1]))
+    const piece: BoardPiece = { key: 'red', equipId: eq.id, name: eq.name, tier: eq.tier, element: eq.element, weaponForm: eq.weaponForm, awaken: 2, cells }
+    const w = mount(BoardGrid, { props: { pieces: [piece], locked: [] } })
+    const grid = w.findAll('.cell')
+    const anchor = Math.min(...cells), tail = Math.max(...cells)
+    expect(grid[anchor].find('.tag .elder-name').text()).toBe('孙悟空')
+    // 红装不再重复显示占格数，形状本身已能看出
+    expect(grid[anchor].find('.tag .piece-cells').exists()).toBe(false)
+    expect(grid[anchor].attributes('title')).toContain(`${cells.length}格`)
+    expect(grid[anchor].find('.awaken-badge').exists()).toBe(false)
+    expect(grid[tail].find('.awaken-badge').text()).toBe('觉2')
+    expect(grid[tail].find('.tag').exists()).toBe(false)
+    // 5 字长老用更小字号，避免撑破格子
+    const long = GAME.elders.find((e) => e.name.length >= 5)!
+    const longEq = GAME.equipById[long.redEquipId]
+    const longShape = GAME.shapeById[longEq.shapeId]
+    const longFirst = [...longShape.cells].sort((a, b) => a[0] - b[0] || a[1] - b[1])[0]
+    const longCells = longShape.cells.map(([r, c]) => (r - longFirst[0]) * 7 + (c - longFirst[1]))
+    const w2 = mount(BoardGrid, {
+      props: { pieces: [{ ...piece, key: 'long', equipId: longEq.id, cells: longCells }], locked: [] },
+    })
+    const nameCell = w2.findAll('.cell')[Math.min(...longCells)]
+    // 有简称就用简称，字号也就不必再压缩
+    expect(nameCell.find('.elder-name').text()).toBe(long.alias ?? long.name)
+    expect(nameCell.find('.elder-name').classes()).not.toContain('xlong')
+    w.unmount()
+    w2.unmount()
+  })
+
   it('圆角仅应用在法宝凸角，相邻同件及凹角保持连续，单格有四个圆角', () => {
     const w = mount(BoardGrid, { props: { pieces: [p('L', [0, 1, 7]), p('single', [2])], locked: [] } })
     const cells = w.findAll('.cell')

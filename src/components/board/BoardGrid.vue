@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { GAME } from '@/core/data'
 import { COLS, ELEMENT_NAME, FORM_NAME, ROWS } from '@/core/types'
 import type { BoardPiece } from '@/composables/board-view'
 
@@ -18,7 +19,18 @@ const owner = computed(() => {
   return m
 })
 const lockedSet = computed(() => new Set(props.locked))
+/** 锚点格（最上最左）放元素/形态/格数/长老名；与游戏一致，觉醒角标放最下最右格 */
 const anchorOf = computed(() => props.pieces.map((p) => Math.min(...p.cells)))
+const tailOf = computed(() => props.pieces.map((p) => Math.max(...p.cells)))
+const elderOf = (index: number) => {
+  const piece = props.pieces[index]
+  return piece ? GAME.elderByRedEquip[piece.equipId] : undefined
+}
+/** 优先用玩家指定的简称，没指定就用全名 */
+const elderLabel = (index: number) => {
+  const elder = elderOf(index)
+  return elder?.alias || elder?.name || ''
+}
 
 const cells = computed(() => {
   const out = []
@@ -35,6 +47,17 @@ const cells = computed(() => {
   }
   return out
 })
+
+const titleOf = (index: number): string => {
+  const p = props.pieces[index]
+  if (!p) return ''
+  const elder = elderOf(index)
+  const parts = [`#${index + 1} ${p.name} · ${p.tier}阶`]
+  if (elder) parts.push(elder.name)
+  if (p.cells.length) parts.push(`${p.cells.length}格`)
+  if (p.awaken) parts.push(`觉醒 ${p.awaken}`)
+  return parts.join(' · ')
+}
 
 function onClick(idx: number, pi: number | undefined) {
   if (props.editable) emit('toggle-lock', idx)
@@ -59,13 +82,19 @@ function onClick(idx: number, pi: number | undefined) {
         editable,
       }"
       :style="cell.pi !== undefined ? { '--piece-color': `var(--tier-${pieces[cell.pi].tier})` } : undefined"
-      :title="cell.pi !== undefined ? `#${cell.pi + 1} ${pieces[cell.pi].name}·${pieces[cell.pi].tier}阶` : cell.locked ? '未开放' : `${Math.floor(cell.idx / 7) + 1}行${(cell.idx % 7) + 1}列`"
+      :title="cell.pi !== undefined ? titleOf(cell.pi) : cell.locked ? '未开放' : `${Math.floor(cell.idx / 7) + 1}行${(cell.idx % 7) + 1}列`"
       @click="onClick(cell.idx, cell.pi)"
     >
       <span v-if="cell.pi !== undefined && anchorOf[cell.pi] === cell.idx" class="tag">
         <span class="symbols"><span class="el" :style="{ background: `var(--el-${pieces[cell.pi].element})` }">{{ ELEMENT_NAME[pieces[cell.pi].element] }}</span><span v-if="pieces[cell.pi].cells.length > 1" class="form">{{ FORM_NAME[pieces[cell.pi].weaponForm] }}</span></span>
-        <span class="piece-cells">{{ pieces[cell.pi].cells.length }}格<small v-if="pieces[cell.pi].awaken"> · 觉{{ pieces[cell.pi].awaken }}</small></span>
+        <span v-if="!elderOf(cell.pi)" class="piece-cells">{{ pieces[cell.pi].cells.length }}格</span>
+        <span
+          v-if="elderOf(cell.pi)"
+          class="elder-name"
+          :class="{ long: elderLabel(cell.pi).length === 4, xlong: elderLabel(cell.pi).length >= 5 }"
+        >{{ elderLabel(cell.pi) }}</span>
       </span>
+      <span v-if="cell.pi !== undefined && tailOf[cell.pi] === cell.idx && pieces[cell.pi].awaken" class="awaken-badge">觉{{ pieces[cell.pi].awaken }}</span>
     </div>
   </div>
 </template>
@@ -114,7 +143,7 @@ function onClick(idx: number, pi: number | undefined) {
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0;
+  gap: 2px;
   font-size: 11px;
   font-weight: 700;
   color: #fff;
@@ -128,5 +157,22 @@ function onClick(idx: number, pi: number | undefined) {
 .tag .form { color: #fff; }
 .tag .piece-cells { font-size: 10px; white-space: nowrap; }
 .tag .el { display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; font-weight: 600; }
+.tag .elder-name { color: #ffd479; font-size: 10px; line-height: 13px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.tag .elder-name.long { font-size: 9px; letter-spacing: -0.2px; }
+.tag .elder-name.xlong { font-size: 8px; letter-spacing: -0.3px; }
 .tag small { color: #d7c2ff; font-size: 10px; }
+.awaken-badge {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  color: #fff;
+  background: rgba(120, 40, 40, 0.9);
+  border: 1px solid #ffd479;
+  border-radius: 5px;
+  padding: 0 3px;
+  pointer-events: none;
+}
 </style>

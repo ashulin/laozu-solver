@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
 import { DATA_VERSION } from '@/core/data/version'
+import BottomBar from '@/components/common/BottomBar.vue'
 import ToastHost from '@/components/common/ToastHost.vue'
+import { NAV_TABS } from '@/router/tabs'
 
-const tabs = [
-  { to: '/recognize', label: '截图识别' },
-  { to: '/solver', label: '优化器' },
-  { to: '/elders', label: '长老管理' },
-]
+const tabs = NAV_TABS
 </script>
 
 <template>
@@ -29,6 +27,7 @@ const tabs = [
   <main class="app-main">
     <RouterView />
   </main>
+  <BottomBar />
   <ToastHost />
 </template>
 
@@ -58,5 +57,9 @@ const tabs = [
 @media (max-width: 640px) {
   .title, .ver { display: none; }
   .app-main { padding: 10px; }
+}
+/* 底部操作条只在窄屏出现，给主内容留出避让空间 */
+@media (max-width: 900px) {
+  .app-main { padding-bottom: 72px; }
 }
 </style>

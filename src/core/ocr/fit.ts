@@ -8,7 +8,7 @@
  * 觉醒版删掉了自动定位，只能手动框选；这里补回来。
  */
 import { ELEMENT_GLYPHS, GEO, TH } from './model'
-import { bestCorrelation, cellBackground, darkRatio, downsample, paletteDistance, type Grid, type RgbImage } from './sampling'
+import { bestCorrelation, cellBackground, darkRatio, downsample, paletteDistance, scaleImage, type Grid, type RgbImage } from './sampling'
 
 export const ROWS = 6
 export const COLS = 7
@@ -139,36 +139,42 @@ export function fitGrid(img: RgbImage): FitResult {
   const factor = Math.max(1, Math.round(est / 36))
   const small = downsample(img, factor)
   const estSmall = est / factor
-
   // 1. 缩小图粗搜：每种格宽保留最好的一个位置
   const byPitch = new Map<number, Cand>()
-  for (let p = estSmall * 0.82; p <= estSmall * 1.2; p += 1) {
-    if (COLS * p > small.w + 4 || ROWS * p > small.h + 4) continue
-    for (let ox = -3; ox <= small.w - COLS * p + 3; ox += 3) {
-      for (let oy = -3; oy <= small.h - ROWS * p + 3; oy += 3) {
-        const s = gridScore(small, { ox, oy, pw: p, ph: p }, 0.06)
-        const key = Math.round(p)
-        const cur = byPitch.get(key)
-        if (!cur || s > cur.s) byPitch.set(key, { s, ox, oy, p })
+  const coarse = () => {
+    for (let p = estSmall * 0.82; p <= estSmall * 1.2; p += 1) {
+      if (COLS * p > small.w + 4 || ROWS * p > small.h + 4) continue
+      const oyTo = small.h - ROWS * p + 3
+      for (let ox = -3; ox <= small.w - COLS * p + 3; ox += 3) {
+        for (let oy = -3; oy <= oyTo; oy += 3) {
+          const s = gridScore(small, { ox, oy, pw: p, ph: p }, 0.06)
+          const key = Math.round(p)
+          const cur = byPitch.get(key)
+          if (!cur || s > cur.s) byPitch.set(key, { s, ox, oy, p })
+        }
       }
     }
   }
-  if (!byPitch.size) return { grid: fallback(img), score: 0, anchors: 0, frame: 0, converged: false }
-
   // 2. 回到原图：先固定格宽细化位置，再按「快速锚点数」挑 4 个做全参数细化
-  const top = [...byPitch.values()].sort((a, b) => b.s - a.s).slice(0, 10)
-  const finalists = top
-    .map((c) => refine(img, { ox: c.ox * factor, oy: c.oy * factor, p: c.p * factor }, [factor * 2, factor], 0.06, true))
-    .map((c) => ({ ...c, s: gridScore(img, toGrid(c)), quick: countAnchors(img, toGrid(c), true) }))
-    .sort((a, b) => b.quick - a.quick || b.s - a.s)
-    .slice(0, 4)
-    .map((c) => refine(img, c, [1, 0.25]))
-
-  let best: Scored | null = null
-  for (const c of finalists) {
-    const s = withAnchors(img, c)
-    if (better(s, best)) best = s
+  const solve = (): Scored | null => {
+    byPitch.clear()
+    coarse()
+    if (!byPitch.size) return null
+    const finalists = [...byPitch.values()].sort((a, b) => b.s - a.s).slice(0, 10)
+      .map((c) => refine(img, { ox: c.ox * factor, oy: c.oy * factor, p: c.p * factor }, [factor * 2, factor], 0.06, true))
+      .map((c) => ({ ...c, s: gridScore(img, toGrid(c)), quick: countAnchors(img, toGrid(c), true) }))
+      .sort((a, b) => b.quick - a.quick || b.s - a.s)
+      .slice(0, 4)
+      .map((c) => refine(img, c, [1, 0.25]))
+    let best: Scored | null = null
+    for (const c of finalists) {
+      const s = withAnchors(img, c)
+      if (better(s, best)) best = s
+    }
+    return best
   }
+
+  let best = solve()
 
   // 3. 结果不理想时在原图上做一次更宽的搜索兜底
   if (!best || (best.anchors < MIN_ANCHORS && best.s < TH.fitConverged)) {
@@ -225,8 +231,19 @@ export function fitGrid(img: RgbImage): FitResult {
     const f = snapped ? frameScore(img, snapped) : 0
     if (snapped && f > frame) { grid = snapped; frame = f }
   }
+  let anchors = countAnchors(img, grid)
+  // 7. 徽章对齐（新增）：底色分对 1~2px 的格宽误差不敏感（边框带能吸收十几像素偏差），
+  //    但元素徽章只占格子左上角一小块，对位置非常敏感。锚点不足时用徽章相关分再对齐一次——
+  //    不同解码器（浏览器 canvas / Node）的色差会让底色分抖动，光靠底色分会误判为定位失败。
+  if (anchors < MIN_ANCHORS) {
+    const aligned = alignByBadges(img, grid)
+    if (aligned) {
+      grid = aligned
+      anchors = countAnchors(img, grid)
+      frame = Math.max(frame, frameScore(img, grid))
+    }
+  }
   const score = gridScore(img, grid)
-  const anchors = countAnchors(img, grid)
 
   if (score < MIN_SCORE && anchors < MIN_ANCHORS) {
     return { grid: fallback(img), score, anchors, converged: false, frame }
@@ -238,6 +255,80 @@ export function fitGrid(img: RgbImage): FitResult {
     frame,
     converged: frame >= FRAME_MIN && (score >= TH.fitConverged || anchors >= MIN_ANCHORS),
   }
+}
+
+/** 网格定位对分辨率敏感：同一张图在不同缩放下可能一个成功一个失败（实测两张游历截图正好相反） */
+const AUTO_SCALES = [1, 0.8, 0.6]
+
+/** 依次尝试不同尺度，返回第一个收敛的结果（坐标换算回原图）；都不收敛时返回原图那次的结果 */
+export function fitGridAuto(img: RgbImage): FitResult & { scale: number } {
+  const base = fitGrid(img)
+  if (base.converged) return { ...base, scale: 1 }
+  for (const scale of AUTO_SCALES) {
+    if (scale === 1) continue
+    const fit = fitGrid(scaleImage(img, scale))
+    if (!fit.converged) continue
+    const grid = { ox: fit.grid.ox / scale, oy: fit.grid.oy / scale, pw: fit.grid.pw / scale, ph: fit.grid.ph / scale }
+    return { ...fit, grid, scale }
+  }
+  return { ...base, scale: 1 }
+}
+
+/** 抽样格：暗比例达标的格子，最多 12 个 */
+function alignPicks(img: RgbImage, grid: Grid): [number, number][] {
+  const out: [number, number][] = []
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (out.length >= 12) return out
+      if (darkRatio(img, grid, r, c, GEO.badgeBox) <= TH.anchorCandidate) continue
+      out.push([r, c])
+    }
+  }
+  return out
+}
+
+/** 徽章对齐分：抽样格里每格最强元素字形的相关分之和（相关性对位置很敏感，可作细粒度目标函数） */
+function badgeScore(img: RgbImage, grid: Grid, picks: [number, number][]): number {
+  let sum = 0
+  for (const [r, c] of picks) {
+    if (darkRatio(img, grid, r, c, GEO.badgeBox) <= TH.anchorCandidate) continue
+    let best = -2
+    for (const tpl of ELEMENT_GLYPHS.values()) {
+      const v = bestCorrelation(img, grid, r, c, GEO.elementBox, tpl, [0])
+      if (v > best) best = v
+    }
+    if (best > 0.2) sum += best
+  }
+  return sum
+}
+
+/** 以徽章相关分为目标，在格宽与左上角上做两级搜索；有明显提升才返回新网格 */
+export function alignByBadges(img: RgbImage, start: Grid): Grid | null {
+  const picks = alignPicks(img, start)
+  if (picks.length < 4) return null
+  const base = badgeScore(img, start, picks)
+  let best = { s: base, g: start }
+  const consider = (g: Grid) => {
+    const s = badgeScore(img, g, picks)
+    if (s > best.s) best = { s, g }
+  }
+  for (let dp = -6; dp <= 6; dp += 2) {
+    for (let dx = -14; dx <= 14; dx += 2) {
+      for (let dy = -14; dy <= 14; dy += 2) {
+        consider({ ox: start.ox + dx, oy: start.oy + dy, pw: start.pw + dp, ph: start.ph + dp })
+      }
+    }
+  }
+  const coarse = best.g
+  for (let dp = -1.5; dp <= 1.5; dp += 0.5) {
+    for (let dx = -2; dx <= 2; dx += 1) {
+      for (let dy = -2; dy <= 2; dy += 1) {
+        consider({ ox: coarse.ox + dx, oy: coarse.oy + dy, pw: coarse.pw + dp, ph: coarse.ph + dp })
+      }
+    }
+  }
+  if (!(best.s > 0) || best.s <= base * 1.1) return null
+  return best.g
 }
 
 /** 整行/整列平移须比当前外框分高出这么多才采用，避免噪声误判 */

@@ -33,13 +33,19 @@ const counts = computed(() => facetCounts(props.entries, f.value))
     </div>
     <div class="row dim">
       <span class="lab">形态</span>
-      <span v-for="w in FORMS" :key="w" class="chip" :class="{ on: f.forms.includes(w) }" @click="settings.toggleFilter('forms', w)">
+      <span
+        v-for="w in FORMS" :key="w" class="chip" :class="{ on: f.forms.includes(w) }"
+        :title="f.forms.includes(w) ? '再点取消' : '只看此形态'" @click="settings.setFilter('forms', w)"
+      >
         {{ FORM_NAME[w] }}<small>{{ counts.forms[w] ?? 0 }}</small>
       </span>
     </div>
     <div class="row dim">
       <span class="lab">占格</span>
-      <span v-for="n in CELL_COUNTS" :key="n" class="chip" :class="{ on: f.cellCounts.includes(n) }" @click="settings.toggleFilter('cellCounts', n)">
+      <span
+        v-for="n in CELL_COUNTS" :key="n" class="chip" :class="{ on: f.cellCounts.includes(n) }"
+        :title="f.cellCounts.includes(n) ? '再点取消' : '只看此占格'" @click="settings.setFilter('cellCounts', n)"
+      >
         {{ n }}格<small>{{ counts.cellCounts[n] ?? 0 }}</small>
       </span>
     </div>
@@ -47,7 +53,7 @@ const counts = computed(() => facetCounts(props.entries, f.value))
       <span class="lab">品阶</span>
       <span
         v-for="t in TIERS" :key="t" class="chip" :class="{ on: f.tiers.includes(t) }"
-        :style="{ '--c': `var(--tier-${t})` }" @click="settings.toggleFilter('tiers', t)"
+        :style="{ '--c': `var(--tier-${t})` }" :title="f.tiers.includes(t) ? '再点取消' : '只看此品阶'" @click="settings.setFilter('tiers', t)"
       ><i class="dot" />{{ TIER_NAME[t] }}<small>{{ counts.tiers[t] ?? 0 }}</small></span>
     </div>
   </div>

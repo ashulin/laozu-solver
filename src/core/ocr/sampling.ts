@@ -33,6 +33,21 @@ export function fromRgba(width: number, height: number, data: ArrayLike<number>)
 }
 
 /** 按 factor×factor 块取平均缩小（粗搜网格用） */
+/** 等比缩放（最近邻），用于按不同尺度定位网格 */
+export function scaleImage(img: RgbImage, scale: number): RgbImage {
+  if (scale >= 1) return img
+  const w = Math.max(1, Math.round(img.w * scale))
+  const h = Math.max(1, Math.round(img.h * scale))
+  return {
+    w,
+    h,
+    px: (x: number, y: number) => img.px(
+      Math.min(img.w - 1, Math.round(x / scale)),
+      Math.min(img.h - 1, Math.round(y / scale)),
+    ),
+  }
+}
+
 export function downsample(img: RgbImage, factor: number): RgbImage {
   if (factor <= 1) return img
   const w = Math.floor(img.w / factor)

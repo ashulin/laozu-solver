@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import { markRaw } from 'vue'
+import { selectedSignature } from '@/core/catalog'
 import { GAME } from '@/core/data'
 import { runSingleLine } from '@/core/solver/anneal'
 import { memoryStorage, setStorageBackend } from '@/services/app-storage'
@@ -77,6 +79,85 @@ describe('elders store', () => {
 })
 
 describe('bag store', () => {
+  it('普通法宝可改阶：只动指定的那一件；红装与占格不同的阶拒绝', () => {
+    const bag = useBagStore()
+    const name = GAME.equips.find((e) => e.elderId === undefined && GAME.equips.filter((x) => x.name === e.name).length > 1)!.name
+    const tiers = GAME.equips.filter((e) => e.name === name && e.shapeId === GAME.equips.find((x) => x.name === name)!.shapeId).sort((a, b) => a.tier - b.tier)
+    expect(tiers.length).toBeGreaterThan(1)
+    bag.add(tiers[0].id, 3)
+    const copies = bag.selected.find((it) => it.equipId === tiers[0].id)!.copies
+    const middle = copies[1].id!
+    expect(bag.setCopyTier(tiers[0].id, middle, tiers[1].tier).ok).toBe(true)
+    // 只升了中间那件，其余不变
+    expect(bag.countOf(tiers[0].id)).toBe(2)
+    expect(bag.countOf(tiers[1].id)).toBe(1)
+    expect(bag.totalPieces).toBe(3)
+    // 身份不变，能继续指定
+    expect(bag.selected.find((it) => it.equipId === tiers[1].id)!.copies[0].id).toBe(middle)
+    // 红装不支持
+    const elders = useEldersStore()
+    elders.update(swk.id, { owned: true, star: 3, awakenCap: 3 })
+    bag.add(JGB)
+    const redCopy = bag.selected.find((it) => it.equipId === JGB)!.copies[0].id!
+    expect(bag.setCopyTier(JGB, redCopy, 4).ok).toBe(false)
+    // 不存在的副本
+    expect(bag.setCopyTier(tiers[0].id, 'not-exist', tiers[1].tier).ok).toBe(false)
+  })
+
+  it('升阶会联动「之前摆盘」里对应的那一件，另一件不动', () => {
+    const bag = useBagStore()
+    const eq = GAME.equips.find((e) => e.elderId === undefined
+      && GAME.equips.some((n) => n.name === e.name && n.shapeId === e.shapeId && n.tier === e.tier + 1))!
+    const next = GAME.equips.find((n) => n.name === eq.name && n.shapeId === eq.shapeId && n.tier === eq.tier + 1)!
+    bag.add(eq.id, 2)
+    bag.setPreviousLayout([
+      { equipId: eq.id, awaken: 0, r: 0, c: 0 },
+      { equipId: eq.id, awaken: 0, r: 1, c: 0 },
+    ])
+    const copyId = bag.selected[0].copies[0].id!
+    expect(bag.setCopyTier(eq.id, copyId, next.tier).ok).toBe(true)
+    expect(bag.previousLayout!.map((p) => p.equipId)).toEqual([next.id, eq.id])
+  })
+
+  it('在摆盘上升阶：联动已选列表并更新之前摆盘的位置', () => {
+    const bag = useBagStore()
+    const eq = GAME.equips.find((e) => e.elderId === undefined
+      && GAME.equips.some((n) => n.name === e.name && n.shapeId === e.shapeId && n.tier === e.tier + 1))!
+    const next = GAME.equips.find((n) => n.name === eq.name && n.shapeId === eq.shapeId && n.tier === eq.tier + 1)!
+    bag.add(eq.id, 1)
+    bag.setPreviousLayout([{ equipId: eq.id, awaken: 0, r: 2, c: 3 }])
+    expect(bag.upgradePlaced(2, 3).ok).toBe(true)
+    expect(bag.previousLayout).toEqual([{ equipId: next.id, awaken: 0, r: 2, c: 3 }])
+    expect(bag.selected).toMatchObject([{ equipId: next.id, copies: [{ awaken: 0 }] }])
+    // 找不到的位置返回失败
+    expect(bag.upgradePlaced(0, 0).ok).toBe(false)
+  })
+
+  it('在摆盘上删除：同时移除之前摆盘位置与已选列表的一件', () => {
+    const bag = useBagStore()
+    bag.add(140101, 2)
+    bag.setPreviousLayout([
+      { equipId: 140101, awaken: 0, r: 0, c: 0 },
+      { equipId: 140101, awaken: 0, r: 1, c: 1 },
+    ])
+    bag.removePlaced(0, 0)
+    expect(bag.previousLayout).toEqual([{ equipId: 140101, awaken: 0, r: 1, c: 1 }])
+    expect(bag.countOf(140101)).toBe(1)
+  })
+
+  it('在摆盘上改红装觉醒：截断到长老上限并联动已选', () => {
+    const elders = useEldersStore()
+    elders.update(swk.id, { owned: true, star: 3, awakenCap: 2 })
+    const bag = useBagStore()
+    bag.add(JGB, 1)
+    const anchor = GAME.shapeById[GAME.equipById[JGB].shapeId].cells.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1])[0]
+    bag.setPreviousLayout([{ equipId: JGB, awaken: 0, r: 0 - anchor[0], c: 0 - anchor[1] }])
+    const { r, c } = { r: bag.previousLayout![0].r, c: bag.previousLayout![0].c }
+    bag.setPlacedAwaken(r, c, 5) // 超过上限 2 → 截断
+    expect(bag.previousLayout![0].awaken).toBe(2)
+    expect(bag.selected[0].copies[0].awaken).toBe(2)
+  })
+
   it('普通法宝可直接添加，统计件数与格数', () => {
     const bag = useBagStore()
     expect(bag.add(140101, 3)).toEqual({ ok: true })
@@ -93,7 +174,7 @@ describe('bag store', () => {
     expect(bag.add(JGB)).toMatchObject({ ok: false, reason: expect.stringContaining('标记为已拥有') })
     e.update(swk.id, { owned: true, star: 2, awakenCap: 3 })
     expect(bag.add(JGB)).toEqual({ ok: true })
-    expect(bag.selected[0].copies).toEqual([{ awaken: 3 }])
+    expect(bag.selected[0].copies.map((c) => c.awaken)).toEqual([3])
     expect(bag.add(JGB)).toMatchObject({ ok: false, reason: expect.stringContaining('3 星可带 2 件') })
     e.setStar(swk.id, 3)
     expect(bag.add(JGB)).toEqual({ ok: true })
@@ -154,6 +235,27 @@ describe('settings store', () => {
     expect(s.hasFilters).toBe(false)
   })
 
+  it('形态/占格/品阶是单选：互斥且再点取消；元素仍可多选', () => {
+    const s = useSettingsStore()
+    s.setFilter('forms', 6)
+    expect(s.catalogFilters.forms).toEqual([6])
+    s.setFilter('forms', 7)
+    expect(s.catalogFilters.forms).toEqual([7]) // 互斥，不是追加
+    s.setFilter('forms', 7)
+    expect(s.catalogFilters.forms).toEqual([]) // 再点取消
+    s.setFilter('cellCounts', 3)
+    s.setFilter('tiers', 5)
+    expect(s.catalogFilters.cellCounts).toEqual([3])
+    expect(s.catalogFilters.tiers).toEqual([5])
+
+    // 元素保持多选
+    s.toggleFilter('elements', 1)
+    s.toggleFilter('elements', 2)
+    expect(s.catalogFilters.elements).toEqual([1, 2])
+    s.clearFilters()
+    expect(s.hasFilters).toBe(false)
+  })
+
   it('线程数：auto 时按核数自适应', () => {
     const s = useSettingsStore()
     expect(s.threadCount).toBeGreaterThanOrEqual(2)
@@ -184,13 +286,23 @@ describe('自动持久化', () => {
 
     setActivePinia(createPinia())
     expect(useEldersStore().config(swk.id)).toEqual({ elderId: swk.id, owned: true, star: 4, awakenCap: 2 })
-    expect(useBagStore().selected).toEqual([{ equipId: JGB, copies: [{ awaken: 2 }] }])
+    expect(useBagStore().selected).toMatchObject([{ equipId: JGB, copies: [{ awaken: 2 }] }])
     expect(useSettingsStore().catalogFilters.forms).toEqual([6])
     expect(useBoardsStore().boards[0].name).toBe('我的摆盘')
   })
 })
 
 describe('solver store', () => {
+  it('求解后背包被修改，结果被标记为过期', () => {
+    const solver = useSolverStore()
+    const bag = useBagStore()
+    bag.add(110101)
+    solver.run = markRaw({ instances: [], ctx: {} as never, signature: selectedSignature(bag.selected) })
+    expect(solver.stale).toBe(false)
+    bag.add(110101)
+    expect(solver.stale).toBe(true)
+  })
+
   class InstantWorker implements WorkerLike {
     onmessage: WorkerLike['onmessage'] = null
     onerror: WorkerLike['onerror'] = null

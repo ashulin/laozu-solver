@@ -59,8 +59,8 @@ describe('校验', () => {
   })
 
   it('背包：法宝必须存在、份数 1~42、锁格 0~41', () => {
-    expect(validateBag(bag, GAME)).toEqual(bag)
-    expect(validateBag(defaultBag(), GAME)).toEqual(defaultBag())
+    expect(validateBag(bag, GAME)).toMatchObject(bag)
+    expect(validateBag(defaultBag(), GAME)).toMatchObject(defaultBag())
     expect(() => validateBag({ ...bag, selected: [{ equipId: 1, copies: [{ awaken: 0 }] }] }, GAME)).toThrow('不存在')
     expect(() => validateBag({ ...bag, selected: [{ equipId: swk.redEquipId, copies: [] }] }, GAME)).toThrow('至少')
     expect(() => validateBag({ ...bag, lockedCells: [42] }, GAME)).toThrow('lockedCells')
@@ -85,7 +85,7 @@ describe('备份', () => {
     if (r.ok) {
       expect(r.available).toEqual(['elders', 'bag', 'settings', 'savedBoards'])
       expect(r.sections.elders).toEqual(elders)
-      expect(r.sections.bag).toEqual(bag)
+      expect(r.sections.bag).toMatchObject(bag)
     }
   })
 

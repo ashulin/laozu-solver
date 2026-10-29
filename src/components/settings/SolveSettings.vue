@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { GAME } from '@/core/data'
+import { useSolveProgress } from '@/composables/solve-progress'
 import { WORKER_CHOICES } from '@/core/solver/temperature'
 import { BUDGET_CHOICES } from '@/services/persist-schema'
 import { useBagStore } from '@/stores/bag'
@@ -19,15 +20,7 @@ const elders = useEldersStore()
 const involvedElders = computed(() => elders.views.filter((v) => bag.selected.some((it) => it.equipId === v.redEquip.id)))
 const awakenInUse = computed(() => bag.selected.some((it) => it.copies.some((c) => c.awaken > 0)))
 
-// 进度条按时间推进
-const now = ref(Date.now())
-let timer: ReturnType<typeof setInterval> | null = null
-watch(() => solver.running, (r) => {
-  if (timer) clearInterval(timer)
-  timer = r ? setInterval(() => (now.value = Date.now()), 250) : null
-}, { immediate: true })
-onBeforeUnmount(() => timer && clearInterval(timer))
-const progress = computed(() => (solver.running ? Math.min(99, ((now.value - solver.startedAt) / 1000 / solver.budgetSec) * 100) : solver.result ? 100 : 0))
+const { progress } = useSolveProgress()
 </script>
 
 <template>
@@ -129,14 +122,8 @@ const progress = computed(() => (solver.running ? Math.min(99, ((now.value - sol
 .solve-bar { display: flex; align-items: center; gap: 10px; }
 .progress { flex: 1; height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
 .progress i { display: block; height: 100%; background: var(--gold); transition: width 0.25s linear; }
+/* 窄屏由底部操作条提供求解入口，这里不再重复 */
 @media (max-width: 900px) {
-  .solve-bar {
-    position: sticky;
-    bottom: 0;
-    background: var(--bg-panel);
-    padding: 8px 0;
-    border-top: 1px solid var(--line);
-    z-index: 5;
-  }
+  .solve-bar { display: none; }
 }
 </style>

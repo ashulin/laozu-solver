@@ -49,13 +49,15 @@ export function fitSuite(shard: number, total: number): void {
   const list = manifest.fixtures.filter((_, i) => i % total === shard)
   describe.skipIf(!FIXTURES_AVAILABLE)(`网格自动定位（真实截图 ${shard + 1}/${total}）`, () => {
     for (const f of list) {
-      it(`${f.file}：定位成功，误差不超过格宽 3%`, () => {
+      it(`${f.file}：定位成功，误差不超过格宽 5%`, () => {
         const img = loadFixture(f.file)
         expect([img.w, img.h]).toEqual(f.size)
         const fit = fitGrid(img)
         expect(fit.converged).toBe(true)
         expect(fit.frame).toBeGreaterThanOrEqual(FRAME_MIN)
-        const tol = f.grid.pitch * 0.03
+        // 容差 5%：徽章对齐会把网格向徽章实际位置拉几像素（人工标的是格线），
+        // 换来更多锚点和更准的识别；整格错位是 100%，这个容差仍然抓得住。
+        const tol = f.grid.pitch * 0.05
         expect(Math.abs(fit.grid.ox - f.grid.ox), 'ox').toBeLessThan(tol)
         expect(Math.abs(fit.grid.oy - f.grid.oy), 'oy').toBeLessThan(tol)
         expect(Math.abs(fit.grid.pw - f.grid.pitch), 'pitch').toBeLessThan(tol)

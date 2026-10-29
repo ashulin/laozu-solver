@@ -25,6 +25,16 @@ const options = computed(() => equips.filter((e) => (!filters.element || e.eleme
   && `${e.name} ${e.elderId !== undefined ? GAME.elderById[e.elderId]?.name : ''}`.includes(keyword.value.trim()))
   .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN') || a.tier - b.tier))
 const currentOutside = computed(() => props.modelValue && !options.value.some((e) => e.id === props.modelValue))
+// 筛选后只剩一件时直接选中，省掉"再点一次下拉"的操作
+const autoPicked = ref<number | null>(null)
+watch(options, (list) => {
+  if (list.length !== 1 || list[0].id === props.modelValue) {
+    if (list.length !== 1) autoPicked.value = null
+    return
+  }
+  autoPicked.value = list[0].id
+  emit('update:modelValue', list[0].id)
+}, { immediate: true })
 </script>
 
 <template>
@@ -43,6 +53,7 @@ const currentOutside = computed(() => props.modelValue && !options.value.some((e
       <option v-for="e in options" :key="e.id" :value="e.id">{{ label(e.id) }}</option>
     </select></label>
     <p v-if="!options.length" class="warn small">暂无匹配，请放宽筛选条件。</p>
+    <p v-else-if="autoPicked !== null" class="ok small">已自动选中唯一匹配：{{ label(autoPicked) }}</p>
   </div>
 </template>
 

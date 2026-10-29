@@ -197,15 +197,35 @@ describe('EquipCatalog', () => {
 })
 
 describe('SelectedList', () => {
-  it('红装逐副本设置觉醒，选项不超过长老上限', async () => {
+  it('红装逐件平铺，可分别设置觉醒且选项不超过长老上限', async () => {
     useEldersStore().update(swk.id, { owned: true, star: 3, awakenCap: 2 })
     useBagStore().add(JGB, 2)
     const w = mount(SelectedList)
-    const selects = w.findAll('.copies select')
+    const selects = w.findAll('select.awaken')
     expect(selects).toHaveLength(2)
     expect(selects[0].findAll('option')).toHaveLength(3)
     await selects[1].setValue('0')
     expect(useBagStore().selected[0].copies.map((c) => c.awaken)).toEqual([2, 0])
+  })
+
+  it('普通法宝逐件平铺，支持升一阶、加一件、删除当前', async () => {
+    const bag = useBagStore()
+    const eq = GAME.equips.find((e) => e.elderId === undefined
+      && GAME.equips.some((n) => n.name === e.name && n.shapeId === e.shapeId && n.tier === e.tier + 1))!
+    bag.add(eq.id, 2)
+    const w = mount(SelectedList)
+    // 两件同款各占一行，不再合并成"×2"
+    expect(w.findAll('.item')).toHaveLength(2)
+    const byText = (text: string) => w.findAll('button').filter((b) => b.text() === text)
+    await byText('↑')[0].trigger('click')
+    expect(bag.totalPieces).toBe(2)
+    expect(bag.selected.map((it) => GAME.equipById[it.equipId].tier).sort((a, b) => a - b)).toEqual([eq.tier, eq.tier + 1])
+
+    await byText('＋')[0].trigger('click')
+    expect(bag.totalPieces).toBe(3)
+    expect(w.findAll('.item')).toHaveLength(3)
+    await byText('−')[0].trigger('click')
+    expect(bag.totalPieces).toBe(2)
   })
 
   it('显示校验提示', () => {
@@ -234,7 +254,7 @@ describe('SolveSettings + BoardPanel', () => {
       await card.find('[aria-label="星级"] [aria-label="增加"]').trigger('click')
       await card.find('[aria-label="觉醒"] [aria-label="减少"]').trigger('click')
       expect(elders.config(swk.id)).toMatchObject({ star: 4, awakenCap: 1 })
-      expect(bag.selected.find((it) => it.equipId === JGB)!.copies).toEqual([{ awaken: 1 }, { awaken: 1 }])
+      expect(bag.selected.find((it) => it.equipId === JGB)!.copies.map((c) => c.awaken)).toEqual([1, 1])
       expect(other.find('.stats').text()).toContain('★4 · 觉醒1')
       expect(w.find('summary .elder-tag').text()).toContain('★4')
       await card.find('input[type="checkbox"]').setValue(false)
@@ -246,7 +266,7 @@ describe('SolveSettings + BoardPanel', () => {
     }
     setActivePinia(createPinia())
     expect(useEldersStore().config(swk.id)).toMatchObject({ owned: false, star: 4, awakenCap: 1 })
-    expect(useBagStore().selected.find((it) => it.equipId === JGB)!.copies).toEqual([{ awaken: 1 }, { awaken: 1 }])
+    expect(useBagStore().selected.find((it) => it.equipId === JGB)!.copies.map((c) => c.awaken)).toEqual([1, 1])
   })
 
   it('只展示涉及长老；移除红装后收起该入口，无觉醒数据的长老不提供觉醒控件', async () => {
@@ -307,7 +327,7 @@ describe('bag.adoptLayout', () => {
       { equipId: JGB, awaken: 3, r: 0, c: 0 }, { equipId: JGB, awaken: 0, r: 2, c: 2 },
       { equipId: 140101, awaken: 0, r: 5, c: 6 }, { equipId: 1, awaken: 0, r: 4, c: 4 },
     ])
-    expect(bag.selected).toEqual([
+    expect(bag.selected).toMatchObject([
       { equipId: JGB, copies: [{ awaken: 3 }, { awaken: 0 }] },
       { equipId: 140101, copies: [{ awaken: 0 }] },
     ])

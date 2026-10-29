@@ -1,6 +1,7 @@
 /** 一次求解的完整生命周期（不持久化） */
 import { defineStore } from 'pinia'
 import { markRaw } from 'vue'
+import { selectedSignature } from '@/core/catalog'
 import { GAME, scoringData } from '@/core/data'
 import { buildContext, buildInstances } from '@/core/solver/instances'
 import { toSavedPieces } from '@/core/solver/layout-score'
@@ -22,6 +23,8 @@ export function setWorkerFactory(f: WorkerFactory | null) {
 interface RunContext {
   instances: Instance[]
   ctx: SolverContext
+  /** 开算时的背包签名：之后改过法宝（升阶/增删）则结果不再对应当前背包 */
+  signature: string
 }
 
 export const useSolverStore = defineStore('solver', {
@@ -40,6 +43,8 @@ export const useSolverStore = defineStore('solver', {
     error: null as string | null,
   }),
   getters: {
+    /** 背包在求解之后被修改过：摆盘仍是旧结果，需要重新求解 */
+    stale: (s) => !!s.run && s.run.signature !== selectedSignature(useBagStore().selected),
     /** 「实时摆盘」视图应显示的摆放：回放点 > 实时最优 > 最终结果 */
     layoutPlacements(s): Placement[] | null {
       if (!s.run) return null
@@ -83,7 +88,7 @@ export const useSolverStore = defineStore('solver', {
       for (const w of bag.warnings) this.appendLog(`⚠ ${w}`)
       if (bag.totalCells > bag.usableCells) this.appendLog(`⚠ 法宝共需 ${bag.totalCells} 格，可用仅 ${bag.usableCells} 格，部分法宝放不下`)
 
-      this.run = markRaw({ instances, ctx })
+      this.run = markRaw({ instances, ctx, signature: selectedSignature(bag.selected) })
       this.running = true
       this.error = null
       this.live = null

@@ -37,6 +37,12 @@ export const useSettingsStore = defineStore('settings', {
       if (i >= 0) list.splice(i, 1)
       else list.push(value)
     },
+    /** 单选：再点已选中的项即取消，否则替换成该项（存储仍是数组，兼容已有备份） */
+    setFilter<K extends ArrayFilterKey>(key: K, value: CatalogFilters[K][number] | null) {
+      const list = this.catalogFilters[key] as unknown[]
+      const keep = value !== null && !list.includes(value) ? [value] : []
+      list.splice(0, list.length, ...keep)
+    },
     clearFilters() {
       this.catalogFilters = defaultFilters()
     },

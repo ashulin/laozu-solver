@@ -64,7 +64,8 @@ export async function decodeScreenshot(file: File): Promise<ImageData> {
     if (!image.naturalWidth || !image.naturalHeight || image.naturalWidth * image.naturalHeight > 32_000_000) {
       throw new Error('图片尺寸无效或超过 3200 万像素，请缩小后重试')
     }
-    const scale = Math.min(1, 1920 / Math.max(image.naturalWidth, image.naturalHeight))
+    // 上限放宽到 2560：常见手机原图（如 1080×2400）可以原样参与定位
+    const scale = Math.min(1, 2560 / Math.max(image.naturalWidth, image.naturalHeight))
     const canvas = document.createElement('canvas')
     canvas.width = Math.round(image.naturalWidth * scale)
     canvas.height = Math.round(image.naturalHeight * scale)

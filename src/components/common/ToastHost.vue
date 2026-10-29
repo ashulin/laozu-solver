@@ -21,6 +21,10 @@ const toasts = useToasts()
   z-index: 100;
   pointer-events: none;
 }
+/* 窄屏有底部操作条，提示再抬高一点避免被遮住 */
+@media (max-width: 900px) {
+  .toast-host { bottom: 96px; }
+}
 .toast {
   background: #2a3040;
   border: 1px solid var(--line);

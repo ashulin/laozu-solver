@@ -116,6 +116,8 @@ export interface ElderConfig {
  * ================================================================ */
 export interface EquipCopy {
   awaken: number // 0~cap；非红装恒为 0
+  /** 副本身份：老数据没有该字段，读取时按下标补齐 */
+  id?: string
 }
 
 export interface SelectedItem {

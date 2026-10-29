@@ -1,6 +1,6 @@
 /** 法宝目录：按名称聚合各阶 + 多维筛选（纯函数） */
 import { isPlayableEquip, type GameData } from './data'
-import type { CatalogFilters, Elder, ElementId, Equip, Shape, Tier, WeaponForm } from './types'
+import type { CatalogFilters, Elder, ElementId, Equip, SelectedItem, Shape, Tier, WeaponForm } from './types'
 
 export interface CatalogEntry {
   name: string
@@ -107,4 +107,12 @@ export function facetCounts(entries: CatalogEntry[], f: CatalogFilters): FacetCo
 export function defaultTierOf(entry: CatalogEntry, f: CatalogFilters): Tier {
   const hit = f.tiers.length ? entry.tiers.filter((t) => f.tiers.includes(t.tier)) : entry.tiers
   return (hit[hit.length - 1] ?? entry.tiers[entry.tiers.length - 1]).tier
+}
+
+/** 已选法宝的内容签名（与顺序无关）：判断求解结果是否还对应现在的背包 */
+export function selectedSignature(selected: SelectedItem[]): string {
+  return selected
+    .map((it) => `${it.equipId}:${it.copies.map((c) => c.awaken).sort((a, b) => a - b).join(',')}`)
+    .sort()
+    .join('|')
 }

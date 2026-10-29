@@ -9,11 +9,14 @@ import { GAME } from '@/core/data'
 import { decodeScreenshot, runRecognition } from '@/services/recognition'
 import { appStore, memoryStorage, setStorageBackend } from '@/services/app-storage'
 import { useBagStore } from '@/stores/bag'
+import { useEldersStore } from '@/stores/elders'
 import { enableAutoPersist } from '@/stores/persist'
 import type { RecognitionCell } from '@/core/ocr/recognize'
 import { rebuildCoverage } from '@/core/ocr/draft'
 
 vi.mock('@/services/recognition', () => ({ decodeScreenshot: vi.fn(), runRecognition: vi.fn() }))
+const routerPush = vi.fn()
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: routerPush }), RouterLink: { template: '<a><slot /></a>' } }))
 const draft = (): RecognitionCell[] => Array.from({ length: 42 }, (_, i) => ({
   row: Math.floor(i / 7), col: i % 7, kind: i === 0 ? 'piece' : 'empty', equipId: i === 0 ? 110101 : null,
   awaken: i === 0 ? 0 : null, confirmed: true, reason: '', candidates: [],
@@ -29,6 +32,7 @@ const upload = async (w: ReturnType<typeof mount>) => {
 }
 beforeEach(() => {
   vi.resetAllMocks()
+  routerPush.mockClear()
   setStorageBackend(memoryStorage()); setActivePinia(createPinia())
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
   vi.mocked(decodeScreenshot).mockResolvedValue(image)
@@ -37,42 +41,80 @@ beforeEach(() => {
 afterEach(() => { wrappers.splice(0).forEach((w) => w.unmount()); vi.restoreAllMocks() })
 
 describe('截图识别页', () => {
-  it('识别不修改背包；勾选确认后原子导入并持久化', async () => {
+  it('识别不修改背包；单次点击即原子导入并持久化', async () => {
     const stop = enableAutoPersist()
     const bag = useBagStore(); bag.add(120101)
     const w = create()
     await upload(w)
     expect(bag.selected[0].equipId).toBe(120101)
     const submit = w.find('.import-box button.primary')
-    expect(submit.attributes('disabled')).toBeDefined()
-    await w.find('.import-box input[aria-label="确认替换背包"]').setValue(true)
+    expect(submit.text()).toContain('导入并替换背包')
+    // 单次确认：点导入即生效，不再有二次确认面板
     await submit.trigger('click')
-    expect(bag.selected).toEqual([{ equipId: 110101, copies: [{ awaken: 0 }] }])
+    expect(w.find('.import-confirm').exists()).toBe(false)
+    expect(bag.selected).toMatchObject([{ equipId: 110101, copies: [{ awaken: 0 }] }])
     expect(bag.previousLayout).toEqual([{ equipId: 110101, awaken: 0, r: 0, c: 0 }])
-    expect(w.text()).toContain('导入完成')
     expect(useSolverStore().boardMode).toBe('current')
+    // 导入成功自动进入优化器
+    expect(routerPush).toHaveBeenCalledWith('/solver')
     stop(); setActivePinia(createPinia())
     expect(useBagStore().previousLayout).toEqual([{ equipId: 110101, awaken: 0, r: 0, c: 0 }])
     expect(useSolverStore().boardMode).toBe('current')
   })
-  it('低置信结果需核对，修改结果会撤销整盘确认', async () => {
+  it('无待核对时一键导入直接生效并跳转；核对编辑区默认收起', async () => {
+    const w = create(); await upload(w)
+    // 全部无需核对：编辑区默认收起
+    expect(w.find('.manual-toggle').attributes('aria-expanded')).toBe('false')
+    const quick = w.findAll('.quick-actions button').find((b) => b.text().includes('一键导入'))!
+    expect(quick.text()).toContain('1 件')
+    await quick.trigger('click')
+    // 没有待核对，不弹跳过确认，直接导入并跳转
+    expect(w.find('.quick-confirm').exists()).toBe(false)
+    expect(useBagStore().previousLayout).toEqual([{ equipId: 110101, awaken: 0, r: 0, c: 0 }])
+    expect(routerPush).toHaveBeenCalledWith('/solver')
+  })
+  it('有待核对时一键导入先弹跳过确认；一键确认后可直接导入并跳转', async () => {
+    const cells = draft()
+    // 未确认的法宝（待核对），用于验证一键确认与一键导入的分支
+    Object.assign(cells[1], { kind: 'piece', equipId: 120101, awaken: 0, confirmed: false, candidates: [] })
+    vi.mocked(runRecognition).mockResolvedValue({ type: 'done', grid, result: { grid, cells } })
+    const w = create(); await upload(w)
+    // 有待核对：编辑区默认展开
+    expect(w.find('.manual-toggle').attributes('aria-expanded')).toBe('true')
+    const quickImport = () => w.findAll('.quick-actions button').find((b) => b.text().includes('一键导入'))!
+    // 先点一键导入：有待核对 → 弹出跳过确认
+    await quickImport().trigger('click')
+    expect(w.find('.quick-confirm').exists()).toBe(true)
+    await w.find('.quick-confirm button.ghost').trigger('click')
+    expect(w.find('.quick-confirm').exists()).toBe(false)
+    // 一键确认：剩余待核对直接采用识别首选
+    await w.findAll('.quick-actions button').find((b) => b.text().includes('一键确认'))!.trigger('click')
+    expect(cells[1].confirmed).toBe(true)
+    expect(w.findAll('.quick-actions button').some((b) => b.text().includes('一键确认'))).toBe(false)
+    // 现在无待核对，一键导入直接生效并跳转
+    await quickImport().trigger('click')
+    expect(useBagStore().previousLayout!.map((p) => p.equipId).sort()).toEqual([110101, 120101])
+    expect(routerPush).toHaveBeenCalledWith('/solver')
+  })
+  it('低置信结果需核对，改动识别结果不会自动导入', async () => {
     const cells = draft(); cells[0].confirmed = false
     vi.mocked(runRecognition).mockResolvedValue({ type: 'done', grid, result: { grid, cells } })
     const w = create(); await upload(w)
-    const accept = w.find('input[aria-label="确认替换背包"]')
-    expect(accept.attributes('disabled')).toBeDefined()
+    const submit = w.find('.import-box button.primary')
+    // 有待核对项时按钮改为"跳过并导入"
+    expect(submit.text()).toContain('跳过')
     await w.find('.editor input[type=checkbox]').setValue(true)
-    await accept.setValue(true)
+    // 改动识别结果本身不触发导入，也不需要再撤销什么确认面板
     await w.find('select[aria-label="核对品阶"]').setValue('2')
     await w.find('select[aria-label="具体法宝"]').setValue('120101')
-    expect((accept.element as HTMLInputElement).checked).toBe(false)
-    expect(useBagStore().selected).toEqual([])
+    expect(w.find('.import-confirm').exists()).toBe(false)
+    expect(useBagStore().selected).toMatchObject([])
   })
   it('解码失败提示错误且不改背包；再次选图可以恢复', async () => {
     vi.mocked(decodeScreenshot).mockRejectedValueOnce(new Error('图片格式不支持'))
     const w = create(); await upload(w)
     expect(w.find('[role=alert]').text()).toContain('图片格式不支持')
-    expect(useBagStore().selected).toEqual([])
+    expect(useBagStore().selected).toMatchObject([])
     await upload(w)
     expect(w.find('.cell-list').exists()).toBe(true)
     expect(w.find('[role=alert]').exists()).toBe(false)
@@ -101,16 +143,18 @@ describe('截图识别页', () => {
     await w.findAll('.review-tabs button').find((b) => b.text().startsWith('全部'))!.trigger('click')
     expect(w.findAll('.cell-list button')).toHaveLength(42)
     await w.find('input[aria-label="不导入待核对项"]').setValue(true)
-    await w.find('input[aria-label="确认替换背包"]').setValue(true)
-    await w.find('.import-box button.primary').trigger('click')
+    const submit = w.find('.import-box button.primary')
+    await submit.trigger('click')
     expect(useBagStore().previousLayout).toEqual([{ equipId: 110101, awaken: 0, r: 0, c: 0 }])
     expect(useSolverStore().boardMode).toBe('current')
   })
-  it('删除和恢复当前法宝，列表有独立已删除分组', async () => {
+  it('删除和恢复当前法宝，删除后切到「全部」仍可见（灰色虚线）', async () => {
     const w = create(); await upload(w)
     await w.findAll('button').find((b) => b.text() === '删除此法宝')!.trigger('click')
+    // 不再有「已排除」分组，删除后切到「全部」，排除项仍在列表里
+    expect(w.findAll('.review-tabs button').some((b) => b.text().startsWith('已排除'))).toBe(false)
+    expect(w.findAll('.review-tabs button').find((b) => b.text().startsWith('全部'))!.attributes('aria-pressed')).toBe('true')
     expect(w.find('.cell-list').text()).toContain('蕴金戒')
-    expect(w.findAll('.review-tabs button').find((b) => b.text().startsWith('已排除'))!.attributes('aria-pressed')).toBe('true')
     expect(w.text()).toContain('本次导入 0 件法宝')
     await w.findAll('button').find((b) => b.text() === '恢复此法宝')!.trigger('click')
     expect(w.text()).toContain('本次导入 1 件法宝')
@@ -120,10 +164,14 @@ describe('截图识别页', () => {
     expect((w.find('[aria-label="核对元素"]').element as HTMLSelectElement).value).toBe('1')
     expect((w.find('[aria-label="核对占格"]').element as HTMLSelectElement).value).toBe('1')
     expect(w.findAll('[aria-label="具体法宝"] option')).toHaveLength(2)
-    await w.find('[aria-label="核对品阶"]').setValue('2')
+    // 当前值已经在筛选结果里，不会重复改动
     expect(w.emitted('update:modelValue')).toBeUndefined()
-    await w.find('[aria-label="具体法宝"]').setValue('120101')
+    // 收窄到只剩一件时自动选中，省掉再点一次下拉
+    await w.find('[aria-label="核对品阶"]').setValue('2')
     expect(w.emitted('update:modelValue')).toEqual([[120101]])
+    expect(w.text()).toContain('已自动选中唯一匹配')
+    await w.find('[aria-label="具体法宝"]').setValue('120101')
+    expect(w.emitted('update:modelValue')).toEqual([[120101], [120101]])
     await w.findAll('button').find((b) => b.text() === '清空筛选')!.trigger('click')
     await w.find('input').setValue('孙悟空')
     const red = GAME.elders.find((e) => e.name === '孙悟空')!
@@ -145,7 +193,7 @@ describe('截图识别页', () => {
     await w.find('[aria-label="具体法宝"]').setValue('110101')
     expect(w.findAll('.cell-list button')).toHaveLength(0)
     expect(w.find('.conflict-list').exists()).toBe(false)
-    expect(w.find('input[aria-label="确认替换背包"]').attributes('disabled')).toBeUndefined()
+    expect(w.find('.import-box button.primary').attributes('disabled')).toBeUndefined()
   })
   it('觉醒默认0时无需额外确认，并可手动修改', async () => {
     const cells = draft()
@@ -155,7 +203,7 @@ describe('截图识别页', () => {
     vi.mocked(runRecognition).mockResolvedValue({ type: 'done', grid, result: { grid, cells } })
     const w = create(); await upload(w)
     expect((w.find('[aria-label="此份红装觉醒"]').element as HTMLSelectElement).value).toBe('0')
-    expect(w.find('input[aria-label="确认替换背包"]').attributes('disabled')).toBeUndefined()
+    expect(w.find('.import-box button.primary').attributes('disabled')).toBeUndefined()
     expect(w.text()).not.toContain('已自动识别，可修改')
     await w.find('[aria-label="此份红装觉醒"]').setValue('2')
     expect((w.find('[aria-label="此份红装觉醒"]').element as HTMLSelectElement).value).toBe('2')
@@ -173,7 +221,7 @@ describe('截图识别页', () => {
     expect(w.find('.editor legend').text()).toContain('第 4 列')
     await w.findAll('button').find((b) => b.text() === '确认并下一个')!.trigger('click')
     expect(w.text()).toContain('全部已核对')
-    expect(useBagStore().selected).toEqual([])
+    expect(useBagStore().selected).toMatchObject([])
     await w.find('[data-cell="6"]').trigger('click')
     expect(w.find('.editor legend').text()).toContain('第 7 列')
   })
@@ -224,6 +272,71 @@ describe('截图识别页', () => {
     expect(w.find('.current-label').text()).toContain('分金刀')
     expect(w.find('.current-label').text()).not.toContain('占用格')
   })
+  it('长老配置与截图冲突时默认展开并列出原因；无冲突时收起', async () => {
+    const cells = draft()
+    const id = GAME.equips.find((e) => e.name === '朔气飞星')!.id
+    Object.assign(cells[0], { kind: 'piece', equipId: id, awaken: 3, confirmed: true })
+    rebuildCoverage(cells)
+    vi.mocked(runRecognition).mockResolvedValue({ type: 'done', grid, result: { grid, cells } })
+    const elder = GAME.elderByRedEquip[id]!
+    useEldersStore().update(elder.id, { owned: false, star: 3, awakenCap: 3 })
+
+    const w = create()
+    await upload(w)
+    expect(w.find('.account-settings').attributes('open')).toBeDefined()
+    expect(w.text()).toContain('未标记为已拥有')
+
+    // 改成拥有但觉醒上限不足，同样应展开
+    useEldersStore().update(elder.id, { owned: true, star: 3, awakenCap: 1 })
+    await upload(w)
+    expect(w.find('.account-settings').attributes('open')).toBeDefined()
+    expect(w.text()).toContain('超过长老')
+
+    // 上限足够时收起
+    useEldersStore().update(elder.id, { owned: true, star: 3, awakenCap: 3 })
+    await upload(w)
+    expect(w.find('.account-settings').attributes('open')).toBeUndefined()
+  })
+  it('长老冲突时主按钮变为「核对长老信息」，点击展开并滚动到长老块', async () => {
+    const cells = draft()
+    const id = GAME.equips.find((e) => e.name === '朔气飞星')!.id
+    Object.assign(cells[0], { kind: 'piece', equipId: id, awaken: 3, confirmed: true })
+    rebuildCoverage(cells)
+    vi.mocked(runRecognition).mockResolvedValue({ type: 'done', grid, result: { grid, cells } })
+    const elder = GAME.elderByRedEquip[id]!
+    useEldersStore().update(elder.id, { owned: false, star: 3, awakenCap: 3 })
+    const w = create(); await upload(w)
+
+    const quick = w.find('.quick-actions .quick-import')
+    expect(quick.text()).toContain('核对长老信息')
+    expect(quick.attributes('disabled')).toBeUndefined()
+    // 没有可直接导入的「一键导入」按钮
+    expect(w.findAll('.quick-actions button').some((b) => b.text().includes('一键导入'))).toBe(false)
+    const details = w.find('.account-settings').element as HTMLDetailsElement
+    details.open = false
+    const scroll = vi.spyOn(details, 'scrollIntoView').mockImplementation(() => {})
+    await quick.trigger('click')
+    expect(details.open).toBe(true)
+    expect(scroll).toHaveBeenCalled()
+    expect(useBagStore().selected).toMatchObject([])
+  })
+  it('携带数量超限（非未拥有/觉醒）同样切换为「核对长老信息」', async () => {
+    const cells = draft()
+    const id = GAME.equips.find((e) => e.name === '朔气飞星')!.id
+    // 两件同款红装（占格不重叠：锚点 0,0 与 0,3），0 星只能带 1 件 → 数量规则冲突
+    Object.assign(cells[0], { kind: 'piece', equipId: id, awaken: 0, confirmed: true })
+    Object.assign(cells[3], { kind: 'piece', equipId: id, awaken: 0, confirmed: true })
+    rebuildCoverage(cells)
+    vi.mocked(runRecognition).mockResolvedValue({ type: 'done', grid, result: { grid, cells } })
+    const elder = GAME.elderByRedEquip[id]!
+    useEldersStore().update(elder.id, { owned: true, star: 0, awakenCap: 0 })
+    const w = create(); await upload(w)
+    const quick = w.find('.quick-actions .quick-import')
+    expect(quick.text()).toContain('核对长老信息')
+    expect(w.text()).toContain('最多带 1 件')
+    expect(useBagStore().selected).toMatchObject([])
+  })
+
   it('「记住这个样子」写入本地存储并标记该格已确认；可整体清除', async () => {
     const w = create()
     await upload(w)

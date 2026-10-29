@@ -228,7 +228,7 @@ describe('识别草稿与导入校验', () => {
     cells[41].kind = 'locked'
     const result = reviewRecognition(cells, configs)
     expect(result.errors).toEqual([])
-    expect(result.data?.selected).toEqual([{ equipId: red.id, copies: [{ awaken: 0 }, { awaken: 2 }] }])
+    expect(result.data?.selected).toMatchObject([{ equipId: red.id, copies: [{ awaken: 0 }, { awaken: 2 }] }])
     expect(result.data?.previousLayout).toEqual([{ equipId: red.id, awaken: 0, r: 0, c: 0 }, { equipId: red.id, awaken: 2, r: 0, c: 3 }])
     expect(result.data?.lockedCells).toEqual([41])
   })

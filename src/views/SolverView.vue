@@ -9,13 +9,13 @@ import SolveLog from '@/components/log/SolveLog.vue'
 <template>
   <div class="solver-page">
     <div class="col left">
-      <EquipCatalog />
-      <SelectedList />
+      <EquipCatalog id="solver-catalog" />
+      <SelectedList id="solver-selected" />
     </div>
     <div class="col right">
-      <BoardPanel />
-      <SolveSettings />
-      <SolveLog />
+      <BoardPanel id="solver-board" />
+      <SolveSettings id="solver-settings" />
+      <SolveLog id="solver-log" />
     </div>
   </div>
 </template>

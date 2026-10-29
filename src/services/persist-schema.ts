@@ -2,6 +2,7 @@
  * 持久化数据的结构定义与校验（导入备份时使用）。
  * 原则：只信任通过校验的字段；逐字段重建对象，未知字段丢弃；任何一处非法则整段拒绝。
  */
+import { newCopyId } from '@/core/copy-id'
 import type { GameData } from '@/core/data'
 import { MAX_SAMPLES, MAX_SAMPLES_PER_EQUIP, isValidSample, type OcrSample, type OcrSamplesData } from '@/core/ocr/learn'
 import { maxAwakenCap } from '@/core/solver/red-rules'
@@ -114,7 +115,10 @@ export function validateBag(v: unknown, game: GameData): BagData {
     if (!game.equipById[equipId]) fail(`${p}.equipId`, `法宝 ${equipId} 不存在`)
     const copies = arr(s.copies, `${p}.copies`, MAX_COPIES_PER_ITEM).map((c, j) => {
       if (!isObj(c)) fail(`${p}.copies[${j}]`, '应为对象')
-      return { awaken: int((c as Record<string, unknown>).awaken, `${p}.copies[${j}].awaken`, 0, 5) }
+      const copy = c as Record<string, unknown>
+      // 老备份没有副本身份，这里补齐，保证"只升其中一件"能指认到具体哪件
+      const id = typeof copy.id === 'string' && copy.id.slice(0, 40) ? copy.id.slice(0, 40) : newCopyId()
+      return { awaken: int(copy.awaken, `${p}.copies[${j}].awaken`, 0, 5), id }
     })
     if (!copies.length) fail(`${p}.copies`, '至少 1 份')
     return { equipId, copies }

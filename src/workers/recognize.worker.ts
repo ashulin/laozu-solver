@@ -1,4 +1,4 @@
-import { fitGrid } from '@/core/ocr/fit'
+import { fitGridAuto } from '@/core/ocr/fit'
 import type { OcrSample } from '@/core/ocr/learn'
 import { recognizeGrid, type RecognitionResult } from '@/core/ocr/recognize'
 import { fromRgba, type Grid } from '@/core/ocr/sampling'
@@ -17,7 +17,7 @@ self.onmessage = (event: MessageEvent<RecognizeJob>) => {
     let grid = event.data.grid
     if (!grid) {
       send({ type: 'progress', message: '正在自动定位 6×7 背包网格…' })
-      const fit = fitGrid(image)
+      const fit = fitGridAuto(image)
       grid = fit.grid
       if (!fit.converged) { send({ type: 'done', grid, result: null }); return }
     }

@@ -4,6 +4,7 @@ import { GAME } from '@/core/data'
 import { ELEMENT_NAME, TIER_NAME } from '@/core/types'
 import { occupiedCells, validGrid } from '@/core/ocr/geometry'
 import { needsReview, rebuildCoverage, reviewRecognition, setExcluded } from '@/core/ocr/draft'
+import { checkRedEquips } from '@/core/solver/red-rules'
 import { extractSample, mergeSample, sampleDrift, type OcrSample } from '@/core/ocr/learn'
 import type { RecognitionCell } from '@/core/ocr/recognize'
 import { fromRgba, type Grid } from '@/core/ocr/sampling'
@@ -16,10 +17,12 @@ import ReviewEquipPicker from '@/components/recognize/ReviewEquipPicker.vue'
 import ReviewBoard from '@/components/recognize/ReviewBoard.vue'
 import { matchesReviewFilter, reviewFootprints, reviewTargets, reviewStatus, REVIEW_STATUS_NAME, type ReviewFilter } from '@/core/ocr/review-board'
 import { useSolverStore } from '@/stores/solver'
+import { useRouter } from 'vue-router'
 
 const bag = useBagStore()
 const elders = useEldersStore()
 const solver = useSolverStore()
+const router = useRouter()
 const image = shallowRef<ImageData | null>(null)
 const canvas = ref<HTMLCanvasElement>()
 const thumb = ref<HTMLCanvasElement>()
@@ -28,12 +31,15 @@ const busy = ref(false)
 const status = ref('')
 const error = ref('')
 const imported = ref(false)
-const accepted = ref(false)
 const cells = ref<RecognitionCell[]>([])
 const grid = ref<Grid | null>(null)
 const activeIndex = ref(0)
 const skipPending = ref(false)
 const listMode = ref<ReviewFilter>('pending')
+// 没有待核对时默认收起核对编辑区；点击某一格会展开
+const reviewOpen = ref(false)
+// 一键导入时若仍有待核对，先弹出确认（确认后跳过它们直接导入）
+const quickSkipPrompt = ref(false)
 const mobileView = ref<'original' | 'recognized'>('recognized')
 // 用户教过的样子：本次会话与下次打开都会参与识别
 const samples = ref<OcrSample[]>(appStore().load('ocrSamples')?.samples ?? [])
@@ -41,6 +47,7 @@ const learnNote = ref('')
 const learnedEquips = computed(() => new Set(samples.value.map((s) => s.equipId)).size)
 const overlapCell = ref<number | null>(null)
 const editor = ref<HTMLFieldSetElement>()
+const elderBox = ref<HTMLDetailsElement>()
 const footprints = computed(() => reviewFootprints(cells.value, skipPending.value))
 const overlapChoices = computed(() => overlapCell.value === null ? [] : reviewTargets(footprints.value, overlapCell.value))
 const canConfirm = computed(() => !!active.value && !active.value.excluded && active.value.kind !== 'unknown' && active.value.kind !== 'covered' && !active.value.conflicts?.length && (active.value.kind !== 'piece' || active.value.awaken !== null))
@@ -73,11 +80,26 @@ const groups = computed(() => {
 })
 const entries = computed(() => groups.value[listMode.value])
 const pendingCount = computed(() => cells.value.filter(pending).length)
-const pieceCount = computed(() => cells.value.filter((c) => c.kind === 'piece' && !c.excluded).length)
+const lockedCount = computed(() => cells.value.filter((c) => c.kind === 'locked').length)
 const omittedCount = computed(() => cells.value.filter((c) => c.kind === 'piece' && (c.excluded || skipPending.value && pending(c))).length)
-const review = computed(() => reviewRecognition(cells.value, elders.configMap, { skipPending: skipPending.value }))
+// 有待核对项时按"跳过"计算可导入结果，这样导入按钮始终可用，跳过数量在按钮与确认面板里写明
+const effectiveSkip = computed(() => skipPending.value || pendingCount.value > 0)
+const review = computed(() => reviewRecognition(cells.value, elders.configMap, { skipPending: effectiveSkip.value }))
 const importCount = computed(() => review.value.data?.previousLayout.length ?? 0)
 const relatedElders = computed(() => elders.views.filter((v) => cells.value.some((c) => c.kind === 'piece' && !c.excluded && !(skipPending.value && pending(c)) && c.equipId === v.redEquip.id)))
+/** 账号配置与截图冲突（未拥有 / 觉醒超限 / 携带数量 / 长老种类）；用来切换按钮、展开长老区并列出原因 */
+const elderWarnings = computed(() => {
+  const byEquip = new Map<number, number[]>()
+  for (const c of cells.value) {
+    if (c.kind !== 'piece' || c.excluded || !c.equipId) continue
+    if (effectiveSkip.value && pending(c)) continue
+    const eq = GAME.equipById[c.equipId]
+    if (eq.elderId === undefined) continue
+    byEquip.set(c.equipId, [...(byEquip.get(c.equipId) ?? []), c.awaken ?? 0])
+  }
+  const items = [...byEquip].map(([equipId, awakens]) => ({ equipId, awakens }))
+  return checkRedEquips(items, elders.configMap, GAME)
+})
 const labelOf = (id: number) => {
   const e = GAME.equipById[id]
   const elder = e.elderId !== undefined ? GAME.elderById[e.elderId]?.name : null
@@ -97,7 +119,7 @@ async function load(file?: File) {
   cancel()
   const token = revision
   busy.value = true; error.value = ''; cells.value = []; grid.value = null; image.value = null
-  imported.value = false; accepted.value = false; framing.value = false; corner.value = null
+  imported.value = false; framing.value = false; corner.value = null
   try {
     const decoded = await decodeScreenshot(file)
     if (token !== revision) return
@@ -152,7 +174,7 @@ async function recognize(manual = false) {
   const run = new AbortController()
   controller = run
   const token = ++revision
-  busy.value = true; error.value = ''; cells.value = []; accepted.value = false; imported.value = false
+  busy.value = true; error.value = ''; cells.value = []; imported.value = false
   framing.value = false; corner.value = null
   try {
     const output = await runRecognition(image.value, manual && grid.value ? { ...grid.value } : undefined, run.signal, (s) => { status.value = s }, samples.value)
@@ -162,10 +184,12 @@ async function recognize(manual = false) {
     cells.value = output.result.cells
     overlapCell.value = null
     mobileView.value = 'recognized'
-    skipPending.value = false
-    listMode.value = cells.value.some(pending) ? 'pending' : 'ready'
+    skipPending.value = false; quickSkipPrompt.value = false
+    const hasPending = cells.value.some(pending)
+    listMode.value = hasPending ? 'pending' : 'ready'
+    reviewOpen.value = hasPending
     activeIndex.value = Math.max(0, cells.value.findIndex(pending))
-    status.value = '识别完成，请核对标记项与红装觉醒'
+    status.value = hasPending ? '识别完成，请核对标记项与红装觉醒' : '识别完成，可直接一键导入'
   } catch (e) {
     if (token === revision && !run.signal.aborted) error.value = e instanceof Error ? e.message : '识别失败'
   } finally {
@@ -185,6 +209,7 @@ function paste(event: ClipboardEvent) {
 function pick(index: number) {
   if (busy.value || framing.value || !cells.value[index]) return
   activeIndex.value = index
+  reviewOpen.value = true
 }
 function chooseCell(index: number) {
   if (busy.value || framing.value || !cells.value[index]) return
@@ -209,9 +234,47 @@ function nextPending() {
   if (next >= 0) pick(next)
   else status.value = '所有项目已核对，可检查整盘后导入'
 }
+/** 一键确认：剩余待核对的格子直接采用识别首选；无法自动处理的冲突格保持待核对 */
+function confirmAllPending() {
+  if (busy.value || framing.value) return
+  for (const cell of cells.value) {
+    if (!pending(cell) || cell.conflicts?.length) continue
+    if (cell.kind === 'unknown') {
+      const top = cell.candidates[0]
+      if (!top) continue
+      const eq = GAME.equipById[top.equipId]
+      cell.kind = 'piece'; cell.equipId = eq.id
+      cell.awaken = eq.elderId === undefined ? 0 : cell.awaken ?? 0
+      cell.awakenDetected = false
+    } else if (cell.kind === 'piece' && cell.awaken === null) {
+      cell.awaken = 0
+    }
+    cell.confirmed = true
+    cell.manuallyConfirmed = true
+    cell.excluded = false
+    cell.reason = '已采用识别首选'
+  }
+  rebuildCoverage(cells.value)
+  quickSkipPrompt.value = false
+  status.value = pendingCount.value ? `仍有 ${pendingCount.value} 项占格冲突需手动处理` : '已全部采用识别首选，可直接导入'
+}
+/** 长老配置与截图冲突时，滚动到长老块并展开，引导用户核对 */
+function goReviewElders() {
+  const el = elderBox.value
+  if (!el) return
+  el.open = true
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
+/** 一键导入：长老冲突时按钮不可用（需人工确认）；仍有待核对时先确认跳过，否则直接导入 */
+function quickImport() {
+  if (!review.value.data || busy.value || framing.value) return
+  if (pendingCount.value > 0 && !quickSkipPrompt.value) { quickSkipPrompt.value = true; return }
+  importBag()
+}
 function toggleExcluded() {
   setExcluded(cells.value, activeIndex.value, !active.value?.excluded)
-  listMode.value = active.value?.excluded ? 'excluded' : pending(active.value) ? 'pending' : 'ready'
+  // 已排除的法宝在「全部」里仍可见（灰色虚线），不再单独分组
+  listMode.value = active.value?.excluded ? 'all' : pending(active.value) ? 'pending' : 'ready'
 }
 function clickPreview(event: MouseEvent) {
   if (!canvas.value || !image.value || busy.value) return
@@ -304,13 +367,15 @@ function draw() {
   }
 }
 function importBag() {
-  if (!accepted.value || busy.value || framing.value) return
-  const result = bag.importRecognition(cells.value, skipPending.value)
+  if (busy.value || framing.value) return
+  const result = bag.importRecognition(cells.value, effectiveSkip.value)
   if (!result.ok) { error.value = result.reason; return }
   solver.setBoardMode('current')
-  imported.value = true; accepted.value = false; error.value = ''
+  imported.value = true; error.value = ''; quickSkipPrompt.value = false
+  // 导入成功直接进入优化器（测试环境无路由时留在原页并显示成功提示）
+  void router?.push('/solver')
 }
-watch([cells, skipPending, grid], async () => { accepted.value = false; imported.value = false; await nextTick(); draw() }, { deep: true })
+watch([cells, grid], async () => { imported.value = false; quickSkipPrompt.value = false; await nextTick(); draw() }, { deep: true })
 watch(activeIndex, async () => { await nextTick(); draw() })
 watch([framing, showFull, mobileView], async () => { if (framing.value) mobileView.value = 'original'; await nextTick(); draw() })
 watch(() => cells.value.length, () => { overlapCell.value = null })
@@ -340,7 +405,7 @@ onBeforeUnmount(() => { cancel(); window.removeEventListener('paste', paste) })
         <div class="row">
           <button :disabled="busy" @click="recognize()">自动重新识别</button>
           <button :disabled="framing" @click="showFull = !showFull">{{ showFull ? '只看背包' : '完整截图' }}</button>
-          <button :disabled="busy" @click="framing = !framing; corner = null; accepted = false">{{ framing ? '取消框选' : '手动框选网格' }}</button>
+          <button :disabled="busy" @click="framing = !framing; corner = null">{{ framing ? '取消框选' : '手动框选网格' }}</button>
         </div>
         <p class="small" :class="framing ? 'warn' : 'muted'">{{ framing ? (corner ? '再点背包网格右下角（不含外框）' : '先点背包网格左上角（不含外框）') : '应仅框住 6 行 × 7 列背包，不含上方待放置法宝。点击格子可校正。' }}</p>
         <details v-if="grid">
@@ -356,9 +421,23 @@ onBeforeUnmount(() => { cancel(); window.removeEventListener('paste', paste) })
         <h3>识别背包 <span class="muted small">· 点击法宝核对</span></h3>
         <p v-if="!cells.length" class="muted">识别结果会显示在这里。网格定位不准时，可以在原图中手动框选。</p>
         <template v-else>
-          <div class="stats"><span><b>{{ pieceCount }}</b> 件法宝</span><span><b>{{ pendingCount }}</b> 项待核对</span><span><b>{{ cells.filter(c => c.kind === 'locked').length }}</b> 未开放格</span></div>
+          <div class="quick-actions">
+            <button v-if="pendingCount" class="small" :disabled="busy || framing" @click="confirmAllPending">一键确认 {{ pendingCount }} 项（采用识别首选）</button>
+            <button v-if="elderWarnings.length" class="primary quick-import" :disabled="busy || framing" @click="goReviewElders">
+              核对长老信息（{{ elderWarnings.length }} 项需处理）
+            </button>
+            <button v-else class="primary quick-import" :disabled="!review.data || busy || framing" @click="quickImport">
+              {{ pendingCount ? `一键导入（跳过 ${pendingCount} 项待核对，共 ${importCount} 件）` : `一键导入（${importCount} 件）` }}
+            </button>
+          </div>
+          <div v-if="quickSkipPrompt" class="quick-confirm row">
+            <span class="warn small">将跳过 {{ pendingCount }} 项待核对 / 未识别格，仅导入 {{ importCount }} 件。</span>
+            <button class="primary small" :disabled="!review.data" @click="importBag">确认导入</button>
+            <button class="ghost small" @click="quickSkipPrompt = false">取消</button>
+          </div>
           <div class="row review-tabs" aria-label="核对分组">
-            <button v-for="(label, mode) in { all: '全部', pending: '待核对', conflict: '冲突', ready: '无需核对', excluded: '已排除' }" :key="mode" :class="['chip', { on: listMode === mode }]" :aria-pressed="listMode === mode" @click="listMode = mode">{{ label }} {{ groups[mode].length }}</button>
+            <button v-for="(label, mode) in { all: '全部', pending: '待核对', conflict: '冲突', ready: '无需核对' }" :key="mode" :class="['chip', { on: listMode === mode }]" :aria-pressed="listMode === mode" @click="listMode = mode">{{ label }} {{ groups[mode].length }}</button>
+            <span class="chip locked-chip" aria-label="锁格数量">锁格 {{ lockedCount }}</span>
           </div>
           <p class="muted small">筛选只淡化其它法宝，不隐藏位置。点击斜纹格可选择重叠法宝。</p>
           <ReviewBoard :cells="cells" :active-index="activeIndex" :filter="listMode" :skip-pending="skipPending" :disabled="busy || framing" @cell-click="chooseCell" />
@@ -366,6 +445,13 @@ onBeforeUnmount(() => { cancel(); window.removeEventListener('paste', paste) })
         </template>
       </section>
       <section v-if="cells.length" class="panel review-editor">
+          <button type="button" class="row manual-toggle" :aria-expanded="reviewOpen" @click="reviewOpen = !reviewOpen">
+            <span class="chevron" aria-hidden="true">{{ reviewOpen ? '▾' : '▸' }}</span>
+            <b>核对与手动编辑</b>
+            <span v-if="pendingCount" class="warn small">{{ pendingCount }} 项待核对</span>
+            <span v-else class="ok small">全部无需核对</span>
+          </button>
+          <div v-show="reviewOpen" class="manual-review">
           <div v-if="overlapChoices.length > 1" class="overlap-choices" role="group" aria-label="重叠格涉及的法宝">
             <p class="warn small">此格涉及多个对象，请选择要核对的一件：</p>
             <div class="row"><button v-for="i in overlapChoices" :key="i" class="small" :class="{ primary: activeIndex === i }" :aria-pressed="activeIndex === i" @click="pick(i)">{{ cells[i].row + 1 }},{{ cells[i].col + 1 }} {{ cellLabel(cells[i]) }}</button><button class="small ghost" @click="overlapCell = null">关闭选择条</button></div>
@@ -406,19 +492,28 @@ onBeforeUnmount(() => { cancel(); window.removeEventListener('paste', paste) })
             <p class="muted small">{{ active.reason || '核对图案、品阶、形状及角标后再导入。' }}</p>
             <div class="row confirm-actions"><button class="primary" :disabled="!canConfirm" @click="confirmNext">确认并下一个</button><span v-if="active.conflicts?.length" class="warn small">请先修正重叠形状或删除误识别法宝。</span><span v-else-if="!pendingCount" class="ok small" role="status">全部已核对</span></div>
           </fieldset>
-          <details v-if="relatedElders.length" class="account-settings">
-            <summary>调整关联长老（账号配置立即保存）</summary>
+          </div>
+          <details v-if="relatedElders.length" ref="elderBox" class="account-settings" :open="elderWarnings.length > 0">
+            <summary>调整关联长老<span v-if="elderWarnings.length" class="warn small"> · {{ elderWarnings.length }} 项需处理</span><span v-else class="muted small">（{{ relatedElders.length }} 位）</span></summary>
+            <ul v-if="elderWarnings.length" class="warn small elder-alerts"><li v-for="(msg, i) in elderWarnings" :key="i">{{ msg }}</li></ul>
             <p class="muted small">账号配置与截图冲突时，请按实际账号调整。识图不会自动提高星级或觉醒，也不会把副本觉醒改成账号上限。</p>
             <ElderCard v-for="v in relatedElders" :key="v.elder.id" :view="v" />
           </details>
-          <div class="import-box">
-            <h3>3. 确认导入</h3>
+          <details class="import-box" :open="!review.data && review.errors.length > 0">
+            <summary>更多导入选项{{ review.data ? '' : ' · 有待处理项' }}</summary>
             <label class="row"><input v-model="skipPending" type="checkbox" aria-label="不导入待核对项" :disabled="busy || framing" />不导入待核对的法宝 / 未识别格</label>
-            <p class="small muted">{{ review.data ? `本次导入 ${importCount} 件法宝` : '请处理下方提示后导入' }}；排除 {{ omittedCount }} 件。被排除的法宝位置留空，已确认的未开放格保留。</p>
+            <p class="small muted">{{ review.data ? `本次导入 ${importCount} 件法宝` : '请处理下方提示后导入' }}；排除 {{ omittedCount }} 件。被排除的法宝位置留空，已确认的未开放格保留。导入即替换当前背包、未开放格与「之前摆盘」，成功后自动进入优化器。</p>
             <div v-if="review.errors.length" class="warn small"><p>还有 {{ review.errors.length }} 项需要处理：</p><ul><li v-for="e in review.errors.slice(0, 6)" :key="e">{{ e }}</li></ul><span v-if="review.errors.length > 6">其余项请查看上方列表。</span></div>
-            <label class="row"><input v-model="accepted" type="checkbox" aria-label="确认替换背包" :disabled="!review.data || busy || framing" />我已核对，将替换当前 {{ bag.totalPieces }} 件法宝、未开放格及「之前摆盘」</label>
-            <button class="primary" :disabled="!accepted || !review.data || busy || framing" @click="importBag">确认替换背包</button>
+            <button
+              class="primary" :disabled="!review.data || busy || framing" @click="importBag"
+            >{{ pendingCount ? `跳过 ${pendingCount} 项待核对并导入（${importCount} 件）` : `导入并替换背包（${importCount} 件）` }}</button>
             <p v-if="imported" class="ok" role="status">导入完成。<RouterLink to="/solver">前往优化器</RouterLink>，可在「之前摆盘」查看截图中的摆法。</p>
+          </details>
+          <div v-if="cells.length" class="import-bar">
+            <span class="muted small">待核对 {{ pendingCount }} · 将导入 {{ importCount }} 件</span>
+            <button
+              class="primary small" :disabled="!review.data || busy || framing" @click="importBag"
+            >{{ pendingCount ? '跳过并导入' : '导入' }}</button>
           </div>
       </section>
     </div>
@@ -447,9 +542,33 @@ h2 { font-size: 20px; } h3 { font-size: 15px; }
 .cell-list { display: grid; gap: 4px; max-height: 240px; overflow-y: auto; margin-bottom: 12px; }.cell-list button { display: flex; align-items: center; gap: 8px; text-align: left; font-size: 12px; padding: 7px 8px; }.cell-list button span:nth-child(2) { flex: 1; }.cell-list .active { border-color: var(--gold); background: var(--gold-weak); }.pending .coord { color: var(--warn); }.pending > .small { color: var(--warn); }.coord { font-variant-numeric: tabular-nums; color: var(--ok); }
 fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 12px; padding: 12px; min-width: 0; }legend { color: var(--gold); }.editor-content { display: flex; align-items: flex-start; gap: 12px; }.thumb { width: 110px; max-height: 250px; object-fit: contain; flex-shrink: 0; }.editor-controls { flex: 1; min-width: 0; }.editor-controls > label { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 12px; }.editor-controls > label.row { flex-direction: row; }.editor-controls input, .editor-controls select { width: 100%; min-width: 0; }.editor-controls input[type=checkbox] { width: auto; }.candidates { gap: 5px; }.candidates button { text-align: left; }
 summary { cursor: pointer; color: var(--gold); padding: 8px 0; }.grid-fields { display: flex; flex-wrap: wrap; gap: 8px; }.grid-fields label { width: 80px; font-size: 12px; }.grid-fields input { width: 100%; }.account-settings { margin: 12px 0; }.account-settings :deep(.elder-card) { margin-bottom: 8px; }.import-box { border-top: 1px solid var(--line); padding-top: 14px; }.import-box > label { margin: 12px 0; font-size: 12px; }.import-box p:last-child { margin-top: 10px; }.import-box a { color: var(--gold); }.import-box ul { padding-left: 20px; margin: 0 0 8px; }
-.review-tabs { margin: 10px 0; gap: 6px; }
+.quick-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 10px; }
+.quick-actions .quick-import { font-weight: 600; }
+.quick-confirm { gap: 8px; align-items: center; margin: 0 0 10px; padding: 8px 10px; border: 1px solid var(--warn); border-radius: 8px; background: var(--bg); flex-wrap: wrap; }
+.quick-confirm span { flex: 1; min-width: 160px; }
+.manual-toggle { display: flex; align-items: center; gap: 8px; width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; cursor: pointer; }
+.manual-toggle .chevron { color: var(--gold); }
+.manual-review { display: block; }
+.review-tabs { margin: 10px 0; gap: 6px; flex-wrap: wrap; }
+.locked-chip { margin-left: auto; color: var(--text-dim); cursor: default; border-style: dashed; }
 .cell-actions { margin: 10px 0; }
 .learn-bar { gap: 8px; margin-top: 6px; }
+.elder-alerts { margin: 6px 0 0; padding-left: 18px; }
+.import-bar { display: none; }
+@media (max-width: 900px) {
+  .import-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: sticky;
+    bottom: 0;
+    z-index: 6;
+    background: var(--bg-panel);
+    border-top: 1px solid var(--line);
+    padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+  }
+  .import-bar span { flex: 1; }
+}
 .empty-state { padding: 30px; }.empty-state ol { display: flex; flex-wrap: wrap; gap: 20px 45px; padding-left: 20px; color: var(--gold); }
 @media (min-width: 801px) { .editor-content { gap: 20px; }.thumb { width: 150px; }.editor-controls { max-width: 640px; } }
 @media (max-width: 800px) {

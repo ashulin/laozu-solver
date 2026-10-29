@@ -84,6 +84,10 @@ function adopt() {
       </span>
     </h2>
 
+    <p v-if="solver.boardMode === 'layout' && solver.stale" class="warn small stale">
+      背包在求解后被修改过（升阶/增删），下面仍是修改前的摆盘与分数，请重新求解。
+    </p>
+
     <div class="score-line">
       <template v-if="solver.boardMode === 'edit'">
         <span class="muted small">点击格子切换「未开放格」（游戏里还没解锁的背包格）。</span>
@@ -129,12 +133,13 @@ function adopt() {
       </template>
     </div>
 
-    <PieceDetail v-if="selectedIndex >= 0" :piece="model.pieces[selectedIndex]" :index="selectedIndex" :weighted="weighted" />
-    <p v-else-if="model.pieces.length" class="muted small">点击棋盘上的法宝查看攻防血与加成来源。</p>
+    <PieceDetail v-if="selectedIndex >= 0" :piece="model.pieces[selectedIndex]" :index="selectedIndex" :weighted="weighted" :editable="solver.boardMode === 'current'" />
+    <p v-else-if="model.pieces.length" class="muted small">点击棋盘上的法宝查看攻防血与加成来源{{ solver.boardMode === 'current' ? '，并可升阶 / 改觉醒 / 删除' : '' }}。</p>
   </section>
 </template>
 
 <style scoped>
+.stale { margin: 0 0 8px; }
 .board-panel { display: flex; flex-direction: column; gap: 10px; }
 .board-panel h2 { flex-wrap: wrap; white-space: nowrap; }
 .modes { margin-left: auto; display: inline-flex; gap: 4px; flex-wrap: wrap; white-space: normal; }

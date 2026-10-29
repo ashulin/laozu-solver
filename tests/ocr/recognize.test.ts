@@ -114,7 +114,7 @@ describe.skipIf(!FIXTURES_AVAILABLE)('原生图库识别真实截图（人工网
         if (red.awaken === 3) expect(detectAwaken(image, grid, occupied, 2)).toBeNull()
       }
     }
-    expect(heldOut).toBe(10)
+    expect(heldOut).toBe(14)
     expect(detected).toBeGreaterThanOrEqual(8)
   })
   it('无角标的纯色区域不误填觉醒', () => {

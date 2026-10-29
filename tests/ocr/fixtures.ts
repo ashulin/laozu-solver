@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { GAME } from '@/core/data'
-import { FRAME_MIN, fitGrid } from '@/core/ocr/fit'
+import { FRAME_MIN, fitGridAuto } from '@/core/ocr/fit'
 import { recognizeGrid } from '@/core/ocr/recognize'
 import { cellBackground, fromRgba, type RgbImage } from '@/core/ocr/sampling'
 import { readImage } from '../../scripts/image-io'
@@ -52,7 +52,8 @@ export function fitSuite(shard: number, total: number): void {
       it(`${f.file}：定位成功，误差不超过格宽 5%`, () => {
         const img = loadFixture(f.file)
         expect([img.w, img.h]).toEqual(f.size)
-        const fit = fitGrid(img)
+        // 与生产路径一致（worker 用 fitGridAuto；部分截图只在缩放尺度上可定位）
+        const fit = fitGridAuto(img)
         expect(fit.converged).toBe(true)
         expect(fit.frame).toBeGreaterThanOrEqual(FRAME_MIN)
         // 容差 5%：徽章对齐会把网格向徽章实际位置拉几像素（人工标的是格线），

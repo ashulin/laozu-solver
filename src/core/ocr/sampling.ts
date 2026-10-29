@@ -163,6 +163,44 @@ export function correlation(a: Float64Array, b: Float64Array): number {
   return s / a.length
 }
 
+/** 共鸣圆章内白色笔画判据（与 build-number-samples.ts 保持一致） */
+const WHITE_MIN = 150
+const WHITE_SAT = 60
+
+/**
+ * numberBox 区域的「白色覆盖率」采样：数字笔画为高值，圆章底色与品阶/元素染色一律为低值。
+ * 相比灰度采样，它消除了不同品阶、元素圆章染色带来的差异，可与真实圆章样本直接比较。
+ * 每个子格在 3x3 像素窗内取白色占比（面积平均，保留抗锯齿边缘的梯度）。
+ */
+export function sampleWhitePatch(img: RgbImage, grid: Grid, row: number, col: number, dx = 0, dy = 0): Float64Array | null {
+  const s = GEO.patchSize
+  const box = GEO.numberBox
+  const step = (box[2] - box[0]) * grid.pw / s
+  const v = new Float64Array(s * s)
+  let covered = 0
+  for (let j = 0; j < s; j++) {
+    for (let i = 0; i < s; i++) {
+      const cx = Math.round(grid.ox + (col + box[0]) * grid.pw + (i + 0.5) * step + dx * grid.pw)
+      const cy = Math.round(grid.oy + (row + box[1]) * grid.ph + (j + 0.5) * step + dy * grid.ph)
+      let hit = 0
+      let total = 0
+      for (let wy = -1; wy <= 1; wy++) for (let wx = -1; wx <= 1; wx++) {
+        const x = cx + wx
+        const y = cy + wy
+        if (x < 0 || y < 0 || x >= img.w || y >= img.h) continue
+        total++
+        const [r, g, b] = img.px(x, y)
+        if (Math.min(r, g, b) > WHITE_MIN && Math.max(r, g, b) - Math.min(r, g, b) < WHITE_SAT) hit++
+      }
+      const p = total ? hit / total : 0
+      v[j * s + i] = p
+      covered += p
+    }
+  }
+  if (covered / v.length < 0.05) return null // 区域内没有数字笔画
+  return normalize(v)
+}
+
 /** 在一组微小平移下取与模板的最大相关系数（容忍网格几像素误差） */
 export function bestCorrelation(
   img: RgbImage, grid: Grid, row: number, col: number, box: readonly number[], template: Float64Array, shifts: readonly number[] = GEO.shifts,

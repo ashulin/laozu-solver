@@ -104,12 +104,23 @@ describe('识图学习样本', () => {
 
 describe.skipIf(!FIXTURES_AVAILABLE)('学习样本参与真实截图识别', () => {
   it('教过之后，原本待核对的格子可以被直接采信', () => {
-    const fixture = manifest.fixtures.find((f) => f.file === 'outgame-wood-water-01.jpg')!
-    const image = loadFixture(fixture.file)
-    const g = { ox: fixture.grid.ox, oy: fixture.grid.oy, pw: fixture.grid.pitch, ph: fixture.grid.pitch }
-    const before = recognizeGrid(image, g)
-    // 找一个原本待核对的法宝格
-    const index = before.cells.findIndex((c) => c.kind === 'piece' && c.equipId && !c.confirmed)
+    // 共鸣数字证据会自动确认一部分原本待核对的格子，所以在几张截图里找到仍有待核对的来测
+    const candidates = ['outgame-metal-04.jpg', 'outgame-water-01.jpg', 'outgame-wood-water-02.jpg']
+    let fixtureFile = ''
+    let image!: ReturnType<typeof loadFixture>
+    let g!: { ox: number; oy: number; pw: number; ph: number }
+    let before!: ReturnType<typeof recognizeGrid>
+    let index = -1
+    for (const file of candidates) {
+      const fixture = manifest.fixtures.find((f) => f.file === file)
+      if (!fixture) continue
+      image = loadFixture(fixture.file)
+      g = { ox: fixture.grid.ox, oy: fixture.grid.oy, pw: fixture.grid.pitch, ph: fixture.grid.pitch }
+      before = recognizeGrid(image, g)
+      index = before.cells.findIndex((c) => c.kind === 'piece' && c.equipId && !c.confirmed)
+      if (index >= 0) { fixtureFile = file; break }
+    }
+    expect(fixtureFile, '应有一张截图仍存在待核对格').not.toBe('')
     expect(index).toBeGreaterThanOrEqual(0)
     const cell = before.cells[index]
     const sample = extractSample(image, g, cell.row, cell.col, cell.equipId!)!

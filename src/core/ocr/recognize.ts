@@ -7,8 +7,8 @@ import { detectAwaken } from './awaken'
 import type { OcrSample } from './learn'
 import { legacyCandidates } from './legacy'
 import { refreshConflicts } from './conflicts'
-import { ELEMENT_GLYPHS, FORM_GLYPHS, FORM_ID, GEO, MODEL, NUMBER_GLYPHS, TH } from './model'
-import { bestCorrelation, cellBackground, colorDistance, darkRatio, inBounds, type Grid, type RgbImage } from './sampling'
+import { ELEMENT_GLYPHS, FORM_GLYPHS, FORM_ID, GEO, MODEL, NUMBER_GLYPHS, NUMBER_SAMPLES, TH } from './model'
+import { bestCorrelation, cellBackground, colorDistance, correlation, darkRatio, inBounds, sampleWhitePatch, type Grid, type RgbImage } from './sampling'
 
 export type CellKind = 'empty' | 'locked' | 'unknown' | 'piece' | 'covered'
 export interface Candidate { equipId: number; distance: number }
@@ -139,14 +139,31 @@ function hasGlyph(img: RgbImage, grid: Grid, row: number, col: number, box: read
   return max - min > 26
 }
 
+/** 共鸣数字：accept/margin 比字形模板宽——数字只在「裁决」时使用，读错成非法共鸣值会被
+ *  候选过滤自然拒绝；相邻合法值（如 8 与 4）的分数差实测 ≥0.11，margin 0.04 足以区分。 */
+const NUMBER_ACCEPT = 0.62
+const NUMBER_MARGIN = 0.04
+
 function readNumber(img: RgbImage, grid: Grid, row: number, col: number): NumberHit | null {
   if (!hasGlyph(img, grid, row, col, GEO.numberBox)) return null
   const scores = [...NUMBER_GLYPHS].map(([text, template]) => ({
     value: Number(text), score: bestCorrelation(img, grid, row, col, GEO.numberBox, template, GEO.shifts),
-  })).sort((a, b) => b.score - a.score)
+  }))
+  // 白色域通道：真实圆章样本与品阶/元素染色无关，同值相关性 ~0.95；两通道取最大分互补
+  for (const { value, templates } of NUMBER_SAMPLES) {
+    let s = -2
+    for (const dx of GEO.shifts) for (const dy of GEO.shifts) {
+      const p = sampleWhitePatch(img, grid, row, col, dx, dy)
+      if (p) s = Math.max(s, correlation(p, templates[0]))
+    }
+    const existing = scores.find((x) => x.value === value)
+    if (existing) existing.score = Math.max(existing.score, s)
+    else scores.push({ value, score: s })
+  }
+  scores.sort((a, b) => b.score - a.score)
   const top = scores[0]
-  if (!top || top.score < TH.numberAccept) return null
-  if (top.score - (scores[1]?.score ?? 0) < TH.numberMargin) return null
+  if (!top || top.score < NUMBER_ACCEPT) return null
+  if (top.score - (scores[1]?.score ?? 0) < NUMBER_MARGIN) return null
   return { value: top.value, score: top.score }
 }
 
@@ -271,8 +288,19 @@ export function recognizeGrid(img: RgbImage, grid: Grid, samples: OcrSample[] = 
     const plainTop = plain[0]
     const tierOnly = !!plainTop && plainTop.equipId !== preferred.equipId
       && GAME.equipById[plainTop.equipId].name === GAME.equipById[preferred.equipId].name
-    const candidates = tierOnly ? plain : ranked
-    const top = tierOnly ? plainTop : preferred
+    // 图案与底色各执一词时，用共鸣数字裁决（数字是阶的硬证据；读错成非法值则不裁决）
+    let decided: Candidate | null = null
+    if (tierOnly && data.numberAt) {
+      const numberFor = (equipId: number) => {
+        const [dr, dc] = tailOffset(GAME.equipById[equipId].shapeId)
+        return data.numberAt?.[dr]?.[dc]?.value ?? null
+      }
+      const preferMatch = resonanceOf(preferred.equipId) === numberFor(preferred.equipId)
+      const plainMatch = resonanceOf(plainTop.equipId) === numberFor(plainTop.equipId)
+      if (preferMatch !== plainMatch) decided = preferMatch ? preferred : plainTop
+    }
+    const candidates = decided ? (decided === preferred ? ranked : plain) : tierOnly ? plain : ranked
+    const top = decided ?? (tierOnly ? plainTop : preferred)
     cell.candidates = candidates.slice(0, 5)
     // 候选太少时补充旧版给出的近似项，方便人工挑选
     if (cell.candidates.length < 3 && !learned.has(top.equipId)) {
@@ -297,8 +325,10 @@ export function recognizeGrid(img: RgbImage, grid: Grid, samples: OcrSample[] = 
     const byColor = !!plainTop && plainTop.equipId !== preferred.equipId
     // 用户教过这件法宝的样子：图案对得上就直接采信，不再要求候选间隔
     const taught = learned.has(top.equipId) && top.distance < 30
-    cell.confirmed = taught || (top.distance < 30 && margin >= (sameName ? 3.5 : 3) && !byColor)
-    cell.reason = taught ? '按你教过的样子匹配' : byColor ? '品阶由底色区分，请核对' : cell.confirmed ? '原生图案匹配' : sameName ? '同件多阶图案接近，请核对品阶' : '图案相近或偏差较大，请核对'
+    cell.confirmed = taught || !!decided || (top.distance < 30 && margin >= (sameName ? 3.5 : 3) && !byColor)
+    cell.reason = taught ? '按你教过的样子匹配'
+      : decided ? '共鸣值与品阶一致，已自动确认'
+      : byColor ? '品阶由底色区分，请核对' : cell.confirmed ? '原生图案匹配' : sameName ? '同件多阶图案接近，请核对品阶' : '图案相近或偏差较大，请核对'
   }
   for (const cell of cells.filter((c) => c.kind === 'piece')) {
     const indices = occupiedCells(cell.equipId!, cell.row, cell.col)!

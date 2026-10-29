@@ -1,1035 +1,1337 @@
 {
-  "_说明": [
-    "截图识别的标准答案。坐标 [行, 列] 从 0 开始，左上角为 [0, 0]，共 6 行 7 列。",
-    "scene：ingame=游历中地图，battle=游历中对决，outgame=弟子详情（游历完成），finish=刚结束游历的弟子详情。",
-    "grid：网格左上角与格宽（像素），已用叠加图人工核对；测试允许误差为格宽的 3%。",
-    "elements：背包里出现的元素（1金 2木 3水 4火 5土 6雷 7邪 8体），人工核对。",
-    "anchor：法宝左上角带元素/形态徽章的那一格（形状按行优先的第一格）。",
-    "awaken：红装右下角火焰角标上的数字（青 1 / 蓝 2 / 紫 3），没有角标为 0。",
-    "normalBadges：普通法宝上出现的火焰角标。按游戏 bug 处理——识别时忽略，普通法宝觉醒恒为 0，不参与计分。",
-    "labeled=false：只核对了网格和元素，红装/空格/锁格尚未标注。",
-    "source：原始文件名。"
-  ],
-  "fixtures": [
+ "_说明": [
+  "截图识别的标准答案。坐标 [行, 列] 从 0 开始，左上角为 [0, 0]，共 6 行 7 列。",
+  "scene：ingame=游历中地图，battle=游历中对决，outgame=弟子详情（游历完成），finish=刚结束游历的弟子详情。",
+  "grid：网格左上角与格宽（像素），已用叠加图人工核对；测试允许误差为格宽的 3%。",
+  "elements：背包里出现的元素（1金 2木 3水 4火 5土 6雷 7邪 8体），人工核对。",
+  "anchor：法宝左上角带元素/形态徽章的那一格（形状按行优先的第一格）。",
+  "awaken：红装右下角火焰角标上的数字（青 1 / 蓝 2 / 紫 3），没有角标为 0。",
+  "normalBadges：普通法宝上出现的火焰角标。按游戏 bug 处理——识别时忽略，普通法宝觉醒恒为 0，不参与计分。",
+  "labeled=false：只核对了网格和元素，红装/空格/锁格尚未标注。",
+  "source：原始文件名。"
+ ],
+ "fixtures": [
+  {
+   "file": "ingame-earth-01.jpg",
+   "scene": "ingame",
+   "sceneNote": "游历中（单局内，法宝还会变化）；网格上方战场区还有待放置的法宝，不属于背包",
+   "size": [
+    1080,
+    2400
+   ],
+   "grid": {
+    "ox": 81.3,
+    "oy": 1161.3,
+    "pitch": 130.8,
+    "verified": true
+   },
+   "element": 5,
+   "empty": [
+    [
+     0,
+     2
+    ],
+    [
+     0,
+     4
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     2,
+     3
+    ],
+    [
+     3,
+     5
+    ],
+    [
+     5,
+     0
+    ],
+    [
+     5,
+     1
+    ]
+   ],
+   "locked": [
+    [
+     3,
+     6
+    ],
+    [
+     4,
+     6
+    ],
+    [
+     5,
+     6
+    ]
+   ],
+   "reds": [
     {
-      "file": "ingame-earth-01.jpg",
-      "scene": "ingame",
-      "sceneNote": "游历中（单局内，法宝还会变化）；网格上方战场区还有待放置的法宝，不属于背包",
-      "size": [
-        1080,
-        2400
+     "name": "逐日镇岳",
+     "anchor": [
+      2,
+      1
+     ],
+     "cells": [
+      [
+       2,
+       1
       ],
-      "grid": {
-        "ox": 81.3,
-        "oy": 1161.3,
-        "pitch": 130.8,
-        "verified": true
-      },
-      "element": 5,
-      "empty": [
-        [
-          0,
-          2
-        ],
-        [
-          0,
-          4
-        ],
-        [
-          1,
-          4
-        ],
-        [
-          1,
-          6
-        ],
-        [
-          2,
-          3
-        ],
-        [
-          3,
-          5
-        ],
-        [
-          5,
-          0
-        ],
-        [
-          5,
-          1
-        ]
+      [
+       3,
+       1
       ],
-      "locked": [
-        [
-          3,
-          6
-        ],
-        [
-          4,
-          6
-        ],
-        [
-          5,
-          6
-        ]
+      [
+       4,
+       0
       ],
-      "reds": [
-        {
-          "name": "逐日镇岳",
-          "anchor": [
-            2,
-            1
-          ],
-          "cells": [
-            [
-              2,
-              1
-            ],
-            [
-              3,
-              1
-            ],
-            [
-              4,
-              0
-            ],
-            [
-              4,
-              1
-            ]
-          ],
-          "awaken": 1
-        },
-        {
-          "name": "泰山压顶",
-          "anchor": [
-            3,
-            3
-          ],
-          "cells": [
-            [
-              3,
-              3
-            ],
-            [
-              4,
-              2
-            ],
-            [
-              4,
-              3
-            ],
-            [
-              5,
-              2
-            ],
-            [
-              5,
-              3
-            ]
-          ],
-          "awaken": 0,
-          "note": "幡面写着「皇天后土」，按形状判断为泰山压顶"
-        }
-      ],
-      "normalBadges": [],
-      "normals": [],
-      "verified": false,
-      "elements": [
-        5
-      ],
-      "labeled": true,
-      "source": "ingame-earth-01.jpg"
+      [
+       4,
+       1
+      ]
+     ],
+     "awaken": 1
     },
     {
-      "file": "ingame-metal-01.jpg",
-      "source": "微信图片_20261020190856_1540_1815.jpg",
-      "scene": "ingame",
-      "sceneNote": "游历中·地图画面（上方战场区有待放置法宝）",
-      "size": [
-        1080,
-        2376
+     "name": "泰山压顶",
+     "anchor": [
+      3,
+      3
+     ],
+     "cells": [
+      [
+       3,
+       3
       ],
-      "grid": {
-        "ox": 90,
-        "oy": 1198.3,
-        "pitch": 128.28,
-        "verified": true
-      },
-      "elements": [
-        1
+      [
+       4,
+       2
       ],
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "battle-earth-01.jpg",
-      "source": "微信图片_20261023130324_2466_1815.jpg",
-      "scene": "battle",
-      "sceneNote": "游历中·对决画面",
-      "size": [
-        1280,
-        2844
+      [
+       4,
+       3
       ],
-      "grid": {
-        "ox": 98.5,
-        "oy": 1411.5,
-        "pitch": 154.61,
-        "verified": true
-      },
-      "elements": [
-        5
+      [
+       5,
+       2
       ],
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "battle-metal-01.jpg",
-      "source": "微信图片_20261020150540_1353_1815.jpg",
-      "scene": "battle",
-      "sceneNote": "游历中·对决画面",
-      "size": [
-        1280,
-        2774
-      ],
-      "grid": {
-        "ox": 101.8,
-        "oy": 1374,
-        "pitch": 154.11,
-        "verified": true
-      },
-      "elements": [
-        1
-      ],
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "finish-wood-01.jpg",
-      "source": "微信图片_20261025032103_3199_1815.jpg",
-      "scene": "finish",
-      "sceneNote": "弟子详情·刚结束游历（底部是「结束游历」按钮，没有操作栏）",
-      "size": [
-        1140,
-        2616
-      ],
-      "grid": {
-        "ox": 95,
-        "oy": 1421.5,
-        "pitch": 136,
-        "verified": true
-      },
-      "elements": [
-        2
-      ],
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "outgame-earth-01.jpg",
-      "source": "微信图片_20261024222949_3066_1815.jpg",
-      "scene": "outgame",
-      "sceneNote": "弟子详情（游历完成）",
-      "size": [
-        1280,
-        2774
-      ],
-      "grid": {
-        "ox": 99.8,
-        "oy": 1465.6,
-        "pitch": 154.36,
-        "verified": true
-      },
-      "elements": [
-        5
-      ],
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "outgame-earth-02.jpg",
-      "source": "微信图片_20261024223240_3085_1815.jpg",
-      "scene": "outgame",
-      "sceneNote": "弟子详情（游历完成）",
-      "size": [
-        1080,
-        2400
-      ],
-      "grid": {
-        "ox": 79.3,
-        "oy": 1262.5,
-        "pitch": 131.53,
-        "verified": true
-      },
-      "elements": [
-        5
-      ],
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "outgame-earth-03.jpg",
-      "source": "微信图片_20261025090923_3212_1815.jpg",
-      "scene": "outgame",
-      "sceneNote": "弟子详情（游历完成）",
-      "size": [
-        1224,
-        2688
-      ],
-      "grid": {
-        "ox": 90.5,
-        "oy": 1413,
-        "pitch": 149.06,
-        "verified": true
-      },
-      "elements": [
-        5
-      ],
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "outgame-earth-04.jpg",
-      "source": "微信图片_20261025194504_3325_1815.jpg",
-      "scene": "outgame",
-      "sceneNote": "弟子详情（游历完成），画面上有微信悬浮按钮",
-      "size": [
-        1080,
-        2400
-      ],
-      "grid": {
-        "ox": 79.5,
-        "oy": 1260.3,
-        "pitch": 131.53,
-        "verified": true
-      },
-      "elements": [
-        5
-      ],
-      "fitNote": "原版算法整体偏上 1 行",
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "outgame-fire-01.jpg",
-      "scene": "outgame",
-      "sceneNote": "弟子详情页（游历完成，法宝固定，只能调摆放）",
-      "size": [
-        1280,
-        2774
-      ],
-      "grid": {
-        "ox": 100.5,
-        "oy": 1467.3,
-        "pitch": 154.6,
-        "verified": true
-      },
-      "element": 4,
-      "empty": [
-        [
-          0,
-          0
-        ]
-      ],
-      "locked": [],
-      "reds": [
-        {
-          "name": "食为天鼎",
-          "anchor": [
-            0,
-            5
-          ],
-          "cells": [
-            [
-              0,
-              5
-            ],
-            [
-              0,
-              6
-            ],
-            [
-              1,
-              5
-            ],
-            [
-              1,
-              6
-            ]
-          ],
-          "awaken": 3
-        },
-        {
-          "name": "食为天鼎",
-          "anchor": [
-            4,
-            5
-          ],
-          "cells": [
-            [
-              4,
-              5
-            ],
-            [
-              4,
-              6
-            ],
-            [
-              5,
-              5
-            ],
-            [
-              5,
-              6
-            ]
-          ],
-          "awaken": 3
-        },
-        {
-          "name": "乾坤浑天",
-          "anchor": [
-            1,
-            2
-          ],
-          "cells": [
-            [
-              1,
-              2
-            ],
-            [
-              2,
-              2
-            ],
-            [
-              3,
-              2
-            ],
-            [
-              4,
-              1
-            ],
-            [
-              4,
-              2
-            ]
-          ],
-          "awaken": 3,
-          "note": "与燃欲燎魂同形状同元素同形态，按画面（乾坤圈+混天绫）判断"
-        },
-        {
-          "name": "乾坤浑天",
-          "anchor": [
-            1,
-            4
-          ],
-          "cells": [
-            [
-              1,
-              4
-            ],
-            [
-              2,
-              4
-            ],
-            [
-              3,
-              4
-            ],
-            [
-              4,
-              3
-            ],
-            [
-              4,
-              4
-            ]
-          ],
-          "awaken": 3
-        }
-      ],
-      "normalBadges": [],
-      "normals": [],
-      "verified": false,
-      "elements": [
-        4
-      ],
-      "labeled": true,
-      "source": "outgame-fire-01.jpg"
-    },
-    {
-      "file": "outgame-fire-02.jpg",
-      "source": "微信图片_20261023211906_2778_1815.jpg",
-      "scene": "outgame",
-      "sceneNote": "弟子详情（游历完成）",
-      "size": [
-        1080,
-        2400
-      ],
-      "grid": {
-        "ox": 81.4,
-        "oy": 1261.1,
-        "pitch": 130.95,
-        "verified": true
-      },
-      "elements": [
-        4
-      ],
-      "fitNote": "原版算法格宽估错，靠外框吸附纠正",
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "outgame-metal-01.jpg",
-      "scene": "outgame",
-      "sceneNote": "弟子详情页",
-      "size": [
-        1280,
-        2781
-      ],
-      "grid": {
-        "ox": 102.3,
-        "oy": 1472.5,
-        "pitch": 154.4,
-        "verified": true
-      },
-      "element": 1,
-      "empty": [],
-      "locked": [],
-      "reds": [
-        {
-          "name": "朔气飞星",
-          "anchor": [
-            3,
-            0
-          ],
-          "cells": [
-            [
-              3,
-              0
-            ],
-            [
-              3,
-              1
-            ],
-            [
-              4,
-              0
-            ],
-            [
-              5,
-              0
-            ]
-          ],
-          "awaken": 2
-        },
-        {
-          "name": "朔气飞星",
-          "anchor": [
-            3,
-            3
-          ],
-          "cells": [
-            [
-              3,
-              3
-            ],
-            [
-              3,
-              4
-            ],
-            [
-              4,
-              3
-            ],
-            [
-              5,
-              3
-            ]
-          ],
-          "awaken": 2
-        },
-        {
-          "name": "金翎荡云",
-          "anchor": [
-            3,
-            2
-          ],
-          "cells": [
-            [
-              3,
-              2
-            ],
-            [
-              4,
-              1
-            ],
-            [
-              4,
-              2
-            ]
-          ],
-          "awaken": 3
-        },
-        {
-          "name": "金翎荡云",
-          "anchor": [
-            2,
-            6
-          ],
-          "cells": [
-            [
-              2,
-              6
-            ],
-            [
-              3,
-              5
-            ],
-            [
-              3,
-              6
-            ]
-          ],
-          "awaken": 3
-        }
-      ],
-      "normalBadges": [
-        {
-          "anchor": [
-            2,
-            5
-          ],
-          "desc": "蓝色 1 格金系戒指，右下角青色火焰 1",
-          "value": 1
-        },
-        {
-          "anchor": [
-            4,
-            4
-          ],
-          "desc": "黄色 2 格金系枪（占 [4,4][5,4]），右下角蓝色火焰 2",
-          "value": 2
-        }
-      ],
-      "normals": [],
-      "verified": false,
-      "elements": [
-        1
-      ],
-      "labeled": true,
-      "source": "outgame-metal-01.jpg"
-    },
-    {
-      "file": "outgame-metal-02.jpg",
-      "scene": "outgame",
-      "sceneNote": "弟子详情页（iPhone，顶部有灵动岛）",
-      "size": [
-        1280,
-        2781
-      ],
-      "grid": {
-        "ox": 101.5,
-        "oy": 1472.8,
-        "pitch": 154.4,
-        "verified": true
-      },
-      "element": 1,
-      "empty": [],
-      "locked": [],
-      "reds": [
-        {
-          "name": "朔气飞星",
-          "anchor": [
-            0,
-            0
-          ],
-          "cells": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              1
-            ],
-            [
-              1,
-              0
-            ],
-            [
-              2,
-              0
-            ]
-          ],
-          "awaken": 2
-        },
-        {
-          "name": "金锋无影",
-          "anchor": [
-            0,
-            2
-          ],
-          "cells": [
-            [
-              0,
-              2
-            ],
-            [
-              1,
-              1
-            ],
-            [
-              1,
-              2
-            ],
-            [
-              2,
-              1
-            ],
-            [
-              2,
-              2
-            ]
-          ],
-          "awaken": 1
-        },
-        {
-          "name": "朔气飞星",
-          "anchor": [
-            2,
-            4
-          ],
-          "cells": [
-            [
-              2,
-              4
-            ],
-            [
-              2,
-              5
-            ],
-            [
-              3,
-              4
-            ],
-            [
-              4,
-              4
-            ]
-          ],
-          "awaken": 2
-        }
-      ],
-      "normalBadges": [],
-      "normals": [],
-      "verified": false,
-      "elements": [
-        1
-      ],
-      "labeled": true,
-      "source": "outgame-metal-02.jpg"
-    },
-    {
-      "file": "outgame-metal-03.jpg",
-      "source": "微信图片_20261025081303_3206_1815.jpg",
-      "scene": "outgame",
-      "sceneNote": "弟子详情（游历完成）",
-      "size": [
-        1224,
-        2688
-      ],
-      "grid": {
-        "ox": 94,
-        "oy": 1419.3,
-        "pitch": 148.31,
-        "verified": true
-      },
-      "elements": [
-        1
-      ],
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "outgame-metal-04.jpg",
-      "source": "微信图片_20261025171549_3300_1815.jpg",
-      "scene": "outgame",
-      "sceneNote": "弟子详情（游历完成）",
-      "size": [
-        1170,
-        2532
-      ],
-      "grid": {
-        "ox": 83.3,
-        "oy": 1334.5,
-        "pitch": 142.24,
-        "verified": true
-      },
-      "elements": [
-        1
-      ],
-      "fitNote": "金色徽章对比度低，只认出 3 个",
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "outgame-metal-05.jpg",
-      "source": "微信图片_20261025175348_3307_1815.jpg",
-      "scene": "outgame",
-      "sceneNote": "弟子详情（游历完成）",
-      "size": [
-        1280,
-        2816
-      ],
-      "grid": {
-        "ox": 98,
-        "oy": 1486.3,
-        "pitch": 155.11,
-        "verified": true
-      },
-      "elements": [
-        1
-      ],
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "outgame-thunder-wood-01.jpg",
-      "source": "微信图片_20261025103501_3233_1815.jpg",
-      "scene": "outgame",
-      "sceneNote": "弟子详情（游历完成）",
-      "size": [
-        1316,
-        2832
-      ],
-      "grid": {
-        "ox": 101.5,
-        "oy": 1495.2,
-        "pitch": 158.99,
-        "verified": true
-      },
-      "elements": [
-        6,
-        2
-      ],
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "outgame-thunder-wood-02.jpg",
-      "source": "微信图片_20261025104204_3234_1815.jpg",
-      "scene": "outgame",
-      "sceneNote": "弟子详情（游历完成）",
-      "size": [
-        1280,
-        2774
-      ],
-      "grid": {
-        "ox": 96.3,
-        "oy": 1463.3,
-        "pitch": 155.61,
-        "verified": true
-      },
-      "elements": [
-        6,
-        2
-      ],
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "outgame-thunder-wood-03.jpg",
-      "source": "微信图片_20261026205614_3563_1815.jpg",
-      "scene": "outgame",
-      "sceneNote": "弟子详情（游历完成）",
-      "size": [
-        1280,
-        2832
-      ],
-      "grid": {
-        "ox": 96.3,
-        "oy": 1492.8,
-        "pitch": 155.11,
-        "verified": true
-      },
-      "elements": [
-        6,
-        2
-      ],
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "outgame-water-01.jpg",
-      "source": "微信图片_20261023211421_2769_1815.jpg",
-      "scene": "outgame",
-      "sceneNote": "弟子详情（游历完成）",
-      "size": [
-        1080,
-        2400
-      ],
-      "grid": {
-        "ox": 85.5,
-        "oy": 1266.8,
-        "pitch": 129.03,
-        "verified": true
-      },
-      "elements": [
-        3
-      ],
-      "fitNote": "上方共鸣神通面板颜色接近格子底色，原版算法会整体偏上 2 行",
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "outgame-water-02.png",
-      "source": "微信图片_20261023224422_2827_1815.png",
-      "scene": "outgame",
-      "sceneNote": "弟子详情（游历完成），小程序窗口截图，分辨率低（格宽约 91px）",
-      "size": [
-        812,
-        1514
-      ],
-      "grid": {
-        "ox": 89,
-        "oy": 815,
-        "pitch": 90.61,
-        "verified": true
-      },
-      "elements": [
-        3
-      ],
-      "fitNote": "低分辨率下水系徽章容易被认成木系",
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "outgame-wood-01.jpg",
-      "source": "微信图片_20261025145554_3280_1815.jpg",
-      "scene": "outgame",
-      "sceneNote": "弟子详情（游历完成）",
-      "size": [
-        1080,
-        2400
-      ],
-      "grid": {
-        "ox": 78.8,
-        "oy": 1262.8,
-        "pitch": 131.53,
-        "verified": true
-      },
-      "elements": [
-        2
-      ],
-      "fitNote": "原版算法整体偏上 1 行",
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "outgame-wood-water-01.jpg",
-      "source": "微信图片_20261023212413_2794_1815.jpg",
-      "scene": "outgame",
-      "sceneNote": "弟子详情（游历完成）",
-      "size": [
-        1080,
-        2400
-      ],
-      "grid": {
-        "ox": 84.3,
-        "oy": 1264.8,
-        "pitch": 130.78,
-        "verified": true
-      },
-      "elements": [
-        2,
-        3
-      ],
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
-    },
-    {
-      "file": "outgame-wood-water-02.jpg",
-      "source": "微信图片_20261023225147_2840_1815.jpg",
-      "scene": "outgame",
-      "sceneNote": "弟子详情（游历完成）",
-      "size": [
-        1080,
-        2400
-      ],
-      "grid": {
-        "ox": 84.3,
-        "oy": 1264.3,
-        "pitch": 130.28,
-        "verified": true
-      },
-      "elements": [
-        2,
-        3
-      ],
-      "fitNote": "与 outgame-wood-water-01 是同一背包，画面上多了微信悬浮按钮",
-      "empty": [],
-      "locked": [],
-      "reds": [],
-      "normals": [],
-      "labeled": false
+      [
+       5,
+       3
+      ]
+     ],
+     "awaken": 0,
+     "note": "幡面写着「皇天后土」，按形状判断为泰山压顶"
     }
-  ]
+   ],
+   "normalBadges": [],
+   "normals": [],
+   "verified": false,
+   "elements": [
+    5
+   ],
+   "labeled": true,
+   "source": "ingame-earth-01.jpg"
+  },
+  {
+   "file": "ingame-metal-01.jpg",
+   "source": "微信图片_20261020190856_1540_1815.jpg",
+   "scene": "ingame",
+   "sceneNote": "游历中·地图画面（上方战场区有待放置法宝）",
+   "size": [
+    1080,
+    2376
+   ],
+   "grid": {
+    "ox": 90,
+    "oy": 1198.3,
+    "pitch": 128.28,
+    "verified": true
+   },
+   "elements": [
+    1
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "battle-earth-01.jpg",
+   "source": "微信图片_20261023130324_2466_1815.jpg",
+   "scene": "battle",
+   "sceneNote": "游历中·对决画面",
+   "size": [
+    1280,
+    2844
+   ],
+   "grid": {
+    "ox": 98.5,
+    "oy": 1411.5,
+    "pitch": 154.61,
+    "verified": true
+   },
+   "elements": [
+    5
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "battle-metal-01.jpg",
+   "source": "微信图片_20261020150540_1353_1815.jpg",
+   "scene": "battle",
+   "sceneNote": "游历中·对决画面",
+   "size": [
+    1280,
+    2774
+   ],
+   "grid": {
+    "ox": 101.8,
+    "oy": 1374,
+    "pitch": 154.11,
+    "verified": true
+   },
+   "elements": [
+    1
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "finish-wood-01.jpg",
+   "source": "微信图片_20261025032103_3199_1815.jpg",
+   "scene": "finish",
+   "sceneNote": "弟子详情·刚结束游历（底部是「结束游历」按钮，没有操作栏）",
+   "size": [
+    1140,
+    2616
+   ],
+   "grid": {
+    "ox": 95,
+    "oy": 1421.5,
+    "pitch": 136,
+    "verified": true
+   },
+   "elements": [
+    2
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "outgame-earth-01.jpg",
+   "source": "微信图片_20261024222949_3066_1815.jpg",
+   "scene": "outgame",
+   "sceneNote": "弟子详情（游历完成）",
+   "size": [
+    1280,
+    2774
+   ],
+   "grid": {
+    "ox": 99.8,
+    "oy": 1465.6,
+    "pitch": 154.36,
+    "verified": true
+   },
+   "elements": [
+    5
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "outgame-earth-02.jpg",
+   "source": "微信图片_20261024223240_3085_1815.jpg",
+   "scene": "outgame",
+   "sceneNote": "弟子详情（游历完成）",
+   "size": [
+    1080,
+    2400
+   ],
+   "grid": {
+    "ox": 79.3,
+    "oy": 1262.5,
+    "pitch": 131.53,
+    "verified": true
+   },
+   "elements": [
+    5
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "outgame-earth-03.jpg",
+   "source": "微信图片_20261025090923_3212_1815.jpg",
+   "scene": "outgame",
+   "sceneNote": "弟子详情（游历完成）",
+   "size": [
+    1224,
+    2688
+   ],
+   "grid": {
+    "ox": 90.5,
+    "oy": 1413,
+    "pitch": 149.06,
+    "verified": true
+   },
+   "elements": [
+    5
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "outgame-earth-04.jpg",
+   "source": "微信图片_20261025194504_3325_1815.jpg",
+   "scene": "outgame",
+   "sceneNote": "弟子详情（游历完成），画面上有微信悬浮按钮",
+   "size": [
+    1080,
+    2400
+   ],
+   "grid": {
+    "ox": 79.5,
+    "oy": 1260.3,
+    "pitch": 131.53,
+    "verified": true
+   },
+   "elements": [
+    5
+   ],
+   "fitNote": "原版算法整体偏上 1 行",
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "outgame-fire-01.jpg",
+   "scene": "outgame",
+   "sceneNote": "弟子详情页（游历完成，法宝固定，只能调摆放）",
+   "size": [
+    1280,
+    2774
+   ],
+   "grid": {
+    "ox": 100.5,
+    "oy": 1467.3,
+    "pitch": 154.6,
+    "verified": true
+   },
+   "element": 4,
+   "empty": [
+    [
+     0,
+     0
+    ]
+   ],
+   "locked": [],
+   "reds": [
+    {
+     "name": "食为天鼎",
+     "anchor": [
+      0,
+      5
+     ],
+     "cells": [
+      [
+       0,
+       5
+      ],
+      [
+       0,
+       6
+      ],
+      [
+       1,
+       5
+      ],
+      [
+       1,
+       6
+      ]
+     ],
+     "awaken": 3
+    },
+    {
+     "name": "食为天鼎",
+     "anchor": [
+      4,
+      5
+     ],
+     "cells": [
+      [
+       4,
+       5
+      ],
+      [
+       4,
+       6
+      ],
+      [
+       5,
+       5
+      ],
+      [
+       5,
+       6
+      ]
+     ],
+     "awaken": 3
+    },
+    {
+     "name": "乾坤浑天",
+     "anchor": [
+      1,
+      2
+     ],
+     "cells": [
+      [
+       1,
+       2
+      ],
+      [
+       2,
+       2
+      ],
+      [
+       3,
+       2
+      ],
+      [
+       4,
+       1
+      ],
+      [
+       4,
+       2
+      ]
+     ],
+     "awaken": 3,
+     "note": "与燃欲燎魂同形状同元素同形态，按画面（乾坤圈+混天绫）判断"
+    },
+    {
+     "name": "乾坤浑天",
+     "anchor": [
+      1,
+      4
+     ],
+     "cells": [
+      [
+       1,
+       4
+      ],
+      [
+       2,
+       4
+      ],
+      [
+       3,
+       4
+      ],
+      [
+       4,
+       3
+      ],
+      [
+       4,
+       4
+      ]
+     ],
+     "awaken": 3
+    }
+   ],
+   "normalBadges": [],
+   "normals": [],
+   "verified": false,
+   "elements": [
+    4
+   ],
+   "labeled": true,
+   "source": "outgame-fire-01.jpg"
+  },
+  {
+   "file": "outgame-fire-02.jpg",
+   "source": "微信图片_20261023211906_2778_1815.jpg",
+   "scene": "outgame",
+   "sceneNote": "弟子详情（游历完成）",
+   "size": [
+    1080,
+    2400
+   ],
+   "grid": {
+    "ox": 81.4,
+    "oy": 1261.1,
+    "pitch": 130.95,
+    "verified": true
+   },
+   "elements": [
+    4
+   ],
+   "fitNote": "原版算法格宽估错，靠外框吸附纠正",
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "outgame-metal-01.jpg",
+   "scene": "outgame",
+   "sceneNote": "弟子详情页",
+   "size": [
+    1280,
+    2781
+   ],
+   "grid": {
+    "ox": 102.3,
+    "oy": 1472.5,
+    "pitch": 154.4,
+    "verified": true
+   },
+   "element": 1,
+   "empty": [],
+   "locked": [],
+   "reds": [
+    {
+     "name": "朔气飞星",
+     "anchor": [
+      3,
+      0
+     ],
+     "cells": [
+      [
+       3,
+       0
+      ],
+      [
+       3,
+       1
+      ],
+      [
+       4,
+       0
+      ],
+      [
+       5,
+       0
+      ]
+     ],
+     "awaken": 2
+    },
+    {
+     "name": "朔气飞星",
+     "anchor": [
+      3,
+      3
+     ],
+     "cells": [
+      [
+       3,
+       3
+      ],
+      [
+       3,
+       4
+      ],
+      [
+       4,
+       3
+      ],
+      [
+       5,
+       3
+      ]
+     ],
+     "awaken": 2
+    },
+    {
+     "name": "金翎荡云",
+     "anchor": [
+      3,
+      2
+     ],
+     "cells": [
+      [
+       3,
+       2
+      ],
+      [
+       4,
+       1
+      ],
+      [
+       4,
+       2
+      ]
+     ],
+     "awaken": 3
+    },
+    {
+     "name": "金翎荡云",
+     "anchor": [
+      2,
+      6
+     ],
+     "cells": [
+      [
+       2,
+       6
+      ],
+      [
+       3,
+       5
+      ],
+      [
+       3,
+       6
+      ]
+     ],
+     "awaken": 3
+    }
+   ],
+   "normalBadges": [
+    {
+     "anchor": [
+      2,
+      5
+     ],
+     "desc": "蓝色 1 格金系戒指，右下角青色火焰 1",
+     "value": 1
+    },
+    {
+     "anchor": [
+      4,
+      4
+     ],
+     "desc": "黄色 2 格金系枪（占 [4,4][5,4]），右下角蓝色火焰 2",
+     "value": 2
+    }
+   ],
+   "normals": [],
+   "verified": false,
+   "elements": [
+    1
+   ],
+   "labeled": true,
+   "source": "outgame-metal-01.jpg"
+  },
+  {
+   "file": "outgame-metal-02.jpg",
+   "scene": "outgame",
+   "sceneNote": "弟子详情页（iPhone，顶部有灵动岛）",
+   "size": [
+    1280,
+    2781
+   ],
+   "grid": {
+    "ox": 101.5,
+    "oy": 1472.8,
+    "pitch": 154.4,
+    "verified": true
+   },
+   "element": 1,
+   "empty": [],
+   "locked": [],
+   "reds": [
+    {
+     "name": "朔气飞星",
+     "anchor": [
+      0,
+      0
+     ],
+     "cells": [
+      [
+       0,
+       0
+      ],
+      [
+       0,
+       1
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       0
+      ]
+     ],
+     "awaken": 2
+    },
+    {
+     "name": "金锋无影",
+     "anchor": [
+      0,
+      2
+     ],
+     "cells": [
+      [
+       0,
+       2
+      ],
+      [
+       1,
+       1
+      ],
+      [
+       1,
+       2
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       2,
+       2
+      ]
+     ],
+     "awaken": 1
+    },
+    {
+     "name": "朔气飞星",
+     "anchor": [
+      2,
+      4
+     ],
+     "cells": [
+      [
+       2,
+       4
+      ],
+      [
+       2,
+       5
+      ],
+      [
+       3,
+       4
+      ],
+      [
+       4,
+       4
+      ]
+     ],
+     "awaken": 2
+    }
+   ],
+   "normalBadges": [],
+   "normals": [],
+   "verified": false,
+   "elements": [
+    1
+   ],
+   "labeled": true,
+   "source": "outgame-metal-02.jpg"
+  },
+  {
+   "file": "outgame-metal-03.jpg",
+   "source": "微信图片_20261025081303_3206_1815.jpg",
+   "scene": "outgame",
+   "sceneNote": "弟子详情（游历完成）",
+   "size": [
+    1224,
+    2688
+   ],
+   "grid": {
+    "ox": 94,
+    "oy": 1419.3,
+    "pitch": 148.31,
+    "verified": true
+   },
+   "elements": [
+    1
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "outgame-metal-04.jpg",
+   "source": "微信图片_20261025171549_3300_1815.jpg",
+   "scene": "outgame",
+   "sceneNote": "弟子详情（游历完成）",
+   "size": [
+    1170,
+    2532
+   ],
+   "grid": {
+    "ox": 83.3,
+    "oy": 1334.5,
+    "pitch": 142.24,
+    "verified": true
+   },
+   "elements": [
+    1
+   ],
+   "fitNote": "金色徽章对比度低，只认出 3 个",
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "outgame-metal-05.jpg",
+   "source": "微信图片_20261025175348_3307_1815.jpg",
+   "scene": "outgame",
+   "sceneNote": "弟子详情（游历完成）",
+   "size": [
+    1280,
+    2816
+   ],
+   "grid": {
+    "ox": 98,
+    "oy": 1486.3,
+    "pitch": 155.11,
+    "verified": true
+   },
+   "elements": [
+    1
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "outgame-thunder-wood-01.jpg",
+   "source": "微信图片_20261025103501_3233_1815.jpg",
+   "scene": "outgame",
+   "sceneNote": "弟子详情（游历完成）",
+   "size": [
+    1316,
+    2832
+   ],
+   "grid": {
+    "ox": 101.5,
+    "oy": 1495.2,
+    "pitch": 158.99,
+    "verified": true
+   },
+   "elements": [
+    6,
+    2
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "outgame-thunder-wood-02.jpg",
+   "source": "微信图片_20261025104204_3234_1815.jpg",
+   "scene": "outgame",
+   "sceneNote": "弟子详情（游历完成）",
+   "size": [
+    1280,
+    2774
+   ],
+   "grid": {
+    "ox": 96.3,
+    "oy": 1463.3,
+    "pitch": 155.61,
+    "verified": true
+   },
+   "elements": [
+    6,
+    2
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "outgame-thunder-wood-03.jpg",
+   "source": "微信图片_20261026205614_3563_1815.jpg",
+   "scene": "outgame",
+   "sceneNote": "弟子详情（游历完成）",
+   "size": [
+    1280,
+    2832
+   ],
+   "grid": {
+    "ox": 96.3,
+    "oy": 1492.8,
+    "pitch": 155.11,
+    "verified": true
+   },
+   "elements": [
+    6,
+    2
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "outgame-water-01.jpg",
+   "source": "微信图片_20261023211421_2769_1815.jpg",
+   "scene": "outgame",
+   "sceneNote": "弟子详情（游历完成）",
+   "size": [
+    1080,
+    2400
+   ],
+   "grid": {
+    "ox": 85.5,
+    "oy": 1266.8,
+    "pitch": 129.03,
+    "verified": true
+   },
+   "elements": [
+    3
+   ],
+   "fitNote": "上方共鸣神通面板颜色接近格子底色，原版算法会整体偏上 2 行",
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "outgame-water-02.png",
+   "source": "微信图片_20261023224422_2827_1815.png",
+   "scene": "outgame",
+   "sceneNote": "弟子详情（游历完成），小程序窗口截图，分辨率低（格宽约 91px）",
+   "size": [
+    812,
+    1514
+   ],
+   "grid": {
+    "ox": 89,
+    "oy": 815,
+    "pitch": 90.61,
+    "verified": true
+   },
+   "elements": [
+    3
+   ],
+   "fitNote": "低分辨率下水系徽章容易被认成木系",
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "outgame-wood-01.jpg",
+   "source": "微信图片_20261025145554_3280_1815.jpg",
+   "scene": "outgame",
+   "sceneNote": "弟子详情（游历完成）",
+   "size": [
+    1080,
+    2400
+   ],
+   "grid": {
+    "ox": 78.8,
+    "oy": 1262.8,
+    "pitch": 131.53,
+    "verified": true
+   },
+   "elements": [
+    2
+   ],
+   "fitNote": "原版算法整体偏上 1 行",
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "outgame-wood-water-01.jpg",
+   "source": "微信图片_20261023212413_2794_1815.jpg",
+   "scene": "outgame",
+   "sceneNote": "弟子详情（游历完成）",
+   "size": [
+    1080,
+    2400
+   ],
+   "grid": {
+    "ox": 84.3,
+    "oy": 1264.8,
+    "pitch": 130.78,
+    "verified": true
+   },
+   "elements": [
+    2,
+    3
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "outgame-wood-water-02.jpg",
+   "source": "微信图片_20261023225147_2840_1815.jpg",
+   "scene": "outgame",
+   "sceneNote": "弟子详情（游历完成）",
+   "size": [
+    1080,
+    2400
+   ],
+   "grid": {
+    "ox": 84.3,
+    "oy": 1264.3,
+    "pitch": 130.28,
+    "verified": true
+   },
+   "elements": [
+    2,
+    3
+   ],
+   "fitNote": "与 outgame-wood-water-01 是同一背包，画面上多了微信悬浮按钮",
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "normals": [],
+   "labeled": false
+  },
+  {
+   "file": "outgame-fire-03.png",
+   "scene": "outgame",
+   "sceneNote": "法宝编辑界面；单火元素背包，红装觉醒角标清晰（用于觉醒阈值回归）",
+   "size": [
+    1290,
+    2796
+   ],
+   "grid": {
+    "ox": 102,
+    "oy": 1354.43,
+    "pitch": 155.68,
+    "verified": true
+   },
+   "empty": [
+    [
+     0,
+     0
+    ]
+   ],
+   "locked": [],
+   "reds": [
+    {
+     "name": "食为天鼎",
+     "anchor": [
+      0,
+      5
+     ],
+     "cells": [
+      [
+       0,
+       5
+      ],
+      [
+       0,
+       6
+      ],
+      [
+       1,
+       5
+      ],
+      [
+       1,
+       6
+      ]
+     ],
+     "awaken": 3
+    },
+    {
+     "name": "乾坤浑天",
+     "anchor": [
+      1,
+      2
+     ],
+     "cells": [
+      [
+       1,
+       2
+      ],
+      [
+       2,
+       2
+      ],
+      [
+       3,
+       2
+      ],
+      [
+       4,
+       1
+      ],
+      [
+       4,
+       2
+      ]
+     ],
+     "awaken": 3
+    },
+    {
+     "name": "乾坤浑天",
+     "anchor": [
+      1,
+      4
+     ],
+     "cells": [
+      [
+       1,
+       4
+      ],
+      [
+       2,
+       4
+      ],
+      [
+       3,
+       4
+      ],
+      [
+       4,
+       3
+      ],
+      [
+       4,
+       4
+      ]
+     ],
+     "awaken": 3
+    },
+    {
+     "name": "食为天鼎",
+     "anchor": [
+      4,
+      5
+     ],
+     "cells": [
+      [
+       4,
+       5
+      ],
+      [
+       4,
+       6
+      ],
+      [
+       5,
+       5
+      ],
+      [
+       5,
+       6
+      ]
+     ],
+     "awaken": 3
+    }
+   ],
+   "labeled": true,
+   "element": 4,
+   "elements": [
+    4
+   ]
+  },
+  {
+   "file": "ingame-water-01.jpg",
+   "scene": "ingame",
+   "sceneNote": "游历中（单局内）；网格上方战场区还有待放置的法宝，不属于背包",
+   "size": [
+    1080,
+    2400
+   ],
+   "grid": {
+    "ox": 86.5,
+    "oy": 1164.5,
+    "pitch": 130,
+    "verified": true
+   },
+   "element": 3,
+   "elements": [
+    3
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "labeled": false
+  },
+  {
+   "file": "ingame-water-02.jpg",
+   "scene": "ingame",
+   "sceneNote": "游历中（单局内）；网格上方战场区还有待放置的法宝，不属于背包",
+   "size": [
+    1080,
+    2400
+   ],
+   "grid": {
+    "ox": 85.8,
+    "oy": 1164.5,
+    "pitch": 129.8,
+    "verified": true
+   },
+   "element": 3,
+   "elements": [
+    3
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "labeled": false
+  },
+  {
+   "file": "ingame-water-03.jpg",
+   "scene": "ingame",
+   "sceneNote": "游历中（单局内）；网格上方战场区还有待放置的法宝，不属于背包",
+   "size": [
+    1080,
+    2400
+   ],
+   "grid": {
+    "ox": 75.5,
+    "oy": 1157,
+    "pitch": 132,
+    "verified": true
+   },
+   "element": 3,
+   "elements": [
+    3
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "labeled": false
+  },
+  {
+   "file": "ingame-earth-02.jpg",
+   "scene": "ingame",
+   "sceneNote": "游历中（单局内）；网格上方战场区还有待放置的法宝，不属于背包",
+   "size": [
+    1080,
+    2400
+   ],
+   "grid": {
+    "ox": 79.7,
+    "oy": 1159.3,
+    "pitch": 131.5,
+    "verified": true
+   },
+   "element": 5,
+   "elements": [
+    5
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "labeled": false
+  },
+  {
+   "file": "ingame-wood-03.jpg",
+   "scene": "ingame",
+   "sceneNote": "游历中（单局内）；网格上方战场区还有待放置的法宝，不属于背包",
+   "size": [
+    1080,
+    2400
+   ],
+   "grid": {
+    "ox": 79.8,
+    "oy": 1158.3,
+    "pitch": 131.8,
+    "verified": true
+   },
+   "element": 2,
+   "elements": [
+    2
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "labeled": false
+  },
+  {
+   "file": "ingame-wood-04.jpg",
+   "scene": "ingame",
+   "sceneNote": "游历中（单局内）；网格上方战场区还有待放置的法宝，不属于背包",
+   "size": [
+    1080,
+    2400
+   ],
+   "grid": {
+    "ox": 81.5,
+    "oy": 1161.8,
+    "pitch": 130.8,
+    "verified": true
+   },
+   "element": 2,
+   "elements": [
+    2
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "labeled": false
+  },
+  {
+   "file": "outgame-wood-03.png",
+   "scene": "outgame",
+   "sceneNote": "法宝编辑界面",
+   "size": [
+    1290,
+    2796
+   ],
+   "grid": {
+    "ox": 101.3,
+    "oy": 1477.9,
+    "pitch": 154.9,
+    "verified": true
+   },
+   "element": 2,
+   "elements": [
+    2
+   ],
+   "empty": [],
+   "locked": [],
+   "reds": [],
+   "labeled": false
+  }
+ ]
 }

@@ -3,6 +3,7 @@
  * 字形模板是 18×18 位图（base64），解码后做零均值、单位方差归一化，供相关系数匹配。
  */
 import rawOcr from '../data/raw/ocr-data.json'
+import numberSamplesRaw from '../data/raw/number-samples.json'
 
 type Box = [number, number, number, number] // 相对格子的 [x0, y0, x1, y1]，0~1
 type Rgb = [number, number, number]
@@ -98,3 +99,20 @@ export const FORM_ID: Record<string, number> = Object.fromEntries(
 )
 /** 右下角数字字形 */
 export const NUMBER_GLYPHS = decodeAll(MODEL.templates.number)
+
+/** int8 量化的白色覆盖率向量（0..255 → -1..1）→ 归一化模板 */
+function decodeWhiteSample(b64: string): Float64Array {
+  const bytes = atob(b64)
+  const raw = new Float64Array(bytes.length)
+  for (let i = 0; i < bytes.length; i++) raw[i] = bytes.charCodeAt(i) - 128
+  return normalize(raw)
+}
+
+/**
+ * 共鸣数字的「白色 mask」真实样本模板（build-number-samples.ts 从夹具截图提取）。
+ * 真实圆章之间的同值相关性实测 ~0.95，远高于内置灰度模板的 0.6~0.7，
+ * 且不受品阶/元素染色影响；与内置模板取最大分互补（样本稀少的值由内置兜底）。
+ */
+export const NUMBER_SAMPLES: { value: number; templates: Float64Array[] }[] = Object.entries(
+  (numberSamplesRaw as { samples: Record<string, string[]> }).samples,
+).map(([value, list]) => ({ value: Number(value), templates: list.map((b64) => decodeWhiteSample(b64)) }))

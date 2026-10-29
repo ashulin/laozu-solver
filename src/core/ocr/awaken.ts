@@ -55,5 +55,6 @@ export function detectAwaken(image: RgbImage, grid: Grid, occupied: number[], ma
     return { value: t.value, score: union ? intersection / union : 0 }
   }).sort((a, b) => b.score - a.score)
   const best = ranked[0]
-  return best && best.value <= maxLevel && best.score >= 0.72 && best.score - (ranked[1]?.score ?? 0) >= 0.10 ? best.value : null
+  // IoU 绝对分随截图分辨率/抗锯齿波动（实测同款角标 0.65~0.74），靠「领先第二名」的 margin 保可靠性
+  return best && best.value <= maxLevel && best.score >= 0.62 && best.score - (ranked[1]?.score ?? 0) >= 0.12 ? best.value : null
 }

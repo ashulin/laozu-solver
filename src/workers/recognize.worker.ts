@@ -1,7 +1,7 @@
 import { fitGridAuto } from '@/core/ocr/fit'
 import type { OcrSample } from '@/core/ocr/learn'
 import { recognizeGrid, type RecognitionResult } from '@/core/ocr/recognize'
-import { fromRgba, type Grid } from '@/core/ocr/sampling'
+import { fromRgba, gaussianSmooth, type Grid } from '@/core/ocr/sampling'
 
 export interface RecognizeJob { w: number; h: number; pixels: Uint8ClampedArray; grid?: Grid; samples?: OcrSample[] }
 export type RecognizeMessage =
@@ -13,7 +13,8 @@ const send = (message: RecognizeMessage) => self.postMessage(message)
 self.onmessage = (event: MessageEvent<RecognizeJob>) => {
   try {
     const { w, h, pixels } = event.data
-    const image = fromRgba(w, h, pixels)
+    // 模板提取自压缩截图，锐利原图的高频会让相关分下降：先做轻度高斯平滑归一
+    const image = gaussianSmooth(fromRgba(w, h, pixels))
     let grid = event.data.grid
     if (!grid) {
       send({ type: 'progress', message: '正在自动定位 6×7 背包网格…' })

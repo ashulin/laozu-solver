@@ -9,6 +9,7 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:fast": "vitest run tests/core tests/data tests/scripts tests/services tests/solver tests/stores tests/ui",
     "test:watch": "vitest",
     "typecheck": "vue-tsc --noEmit",
     "extract-data": "node scripts/extract-data.mjs"

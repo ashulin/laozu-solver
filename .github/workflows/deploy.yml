@@ -19,14 +19,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true # 截图识别测试用的截图存在 Git LFS 里
+        # 识图测试（含 LFS 截图夹具）只在本地跑，CI 不拉 LFS 以加快检出
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm test
+      - run: npm run test:fast
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -110,6 +110,52 @@ export function matchArt(img: RgbImage, grid: Grid, eq: Equip, row: number, col:
 
 interface NumberHit { value: number; score: number }
 
+/** 模板不透明采样点按法宝编号索引：形状掩码反采底色用 */
+const templatePoints = new Map(library.templates.map((t) => [t.id, t.points] as const))
+
+/**
+ * 形状掩码反采底色：同名多阶候选共享形状，把候选模板的不透明采样点并起来视为图案区，
+ * 在每个占格里避开图案、角标（左上元素/形态标、右下共鸣圆章）与边框后取中位色。
+ * 与 analyze 的固定边界带（约 14% 采点落在图案上）不同，这里采到的几乎必然是底色，
+ * 用于裁决同件多阶（图案几乎一致、只能靠底色与共鸣值区分）时最可靠。
+ */
+export function maskedBackground(img: RgbImage, grid: Grid, row: number, col: number, equipIds: number[]): [number, number, number] | null {
+  const pts: [number, number][] = []
+  for (const id of equipIds) {
+    const points = templatePoints.get(id)
+    if (!points) return null
+    for (let i = 0; i < points.length; i += 5) pts.push([points[i] / 1000, points[i + 1] / 1000])
+  }
+  const shape = GAME.shapeById[GAME.equipById[equipIds[0]].shapeId]
+  const rs: number[] = [], gs: number[] = [], bs: number[] = []
+  for (const [dr, dc] of shape.cells) {
+    const r = row + dr, c = col + dc
+    if (r > 5 || c > 6) return null
+    for (let py = 0.1; py <= 0.9; py += 0.05) {
+      for (let px = 0.1; px <= 0.9; px += 0.05) {
+        // 角标叠加区与贴边处不是纯底色
+        if (px < 0.34 && py < 0.52) continue
+        if (px > 0.66 && py > 0.6) continue
+        // 图案区（模板点为稀疏采样，按采样间距加 0.07 容差）
+        const fx = dc + px, fy = dr + py
+        let art = false
+        for (const [tx, ty] of pts) if (Math.abs(tx - fx) < 0.07 && Math.abs(ty - fy) < 0.07) { art = true; break }
+        if (art) continue
+        const x = Math.round(grid.ox + (c + px) * grid.pw)
+        const y = Math.round(grid.oy + (r + py) * grid.ph)
+        if (!inBounds(img, x, y)) continue
+        const p = img.px(x, y)
+        rs.push(p[0]); gs.push(p[1]); bs.push(p[2])
+        if (rs.length >= 400) break
+      }
+      if (rs.length >= 400) break
+    }
+  }
+  if (rs.length < 10) return null
+  const median = (a: number[]) => { const s = [...a].sort((x, y) => x - y); return s[s.length >> 1] }
+  return [median(rs), median(gs), median(bs)]
+}
+
 /** 右下角标可能落在的占格偏移（由全部形状推出，最多 3 行 2 列） */
 const TAIL_OFFSETS: [number, number][] = (() => {
   const seen = new Set<string>()
@@ -263,7 +309,8 @@ export function rankCandidates(img: RgbImage, grid: Grid, index: number, data: C
   return rankCandidatesWithEvidence(img, grid, index, data, strongAnchors, samples).ranked
 }
 
-export function recognizeGrid(img: RgbImage, grid: Grid, samples: OcrSample[] = []): RecognitionResult {
+export function recognizeGrid(input: RgbImage, grid: Grid, samples: OcrSample[] = []): RecognitionResult {
+  const img = input
   if (!validGrid(img, grid)) throw new Error('网格必须完整位于图片内，且每格至少 12 像素')
   const info = Array.from({ length: 42 }, (_, i) => analyze(img, grid, Math.floor(i / 7), i % 7))
   const cells: RecognitionCell[] = info.map((c, i) => ({ row: Math.floor(i / 7), col: i % 7, kind: c.kind,
@@ -290,6 +337,7 @@ export function recognizeGrid(img: RgbImage, grid: Grid, samples: OcrSample[] = 
       && GAME.equipById[plainTop.equipId].name === GAME.equipById[preferred.equipId].name
     // 图案与底色各执一词时，用共鸣数字裁决（数字是阶的硬证据；读错成非法值则不裁决）
     let decided: Candidate | null = null
+    let decidedReason = ''
     if (tierOnly && data.numberAt) {
       const numberFor = (equipId: number) => {
         const [dr, dc] = tailOffset(GAME.equipById[equipId].shapeId)
@@ -297,7 +345,23 @@ export function recognizeGrid(img: RgbImage, grid: Grid, samples: OcrSample[] = 
       }
       const preferMatch = resonanceOf(preferred.equipId) === numberFor(preferred.equipId)
       const plainMatch = resonanceOf(plainTop.equipId) === numberFor(plainTop.equipId)
-      if (preferMatch !== plainMatch) decided = preferMatch ? preferred : plainTop
+      if (preferMatch !== plainMatch) {
+        decided = preferMatch ? preferred : plainTop
+        decidedReason = '共鸣值与品阶一致，已自动确认'
+      }
+    }
+    // 共鸣数字缺席时用形状掩码反采底色裁决：候选共享形状，图案区之外必然是底色
+    if (tierOnly && !decided) {
+      const bg = maskedBackground(img, grid, cell.row, cell.col, [preferred.equipId, plainTop.equipId])
+      if (bg) {
+        const palette = MODEL.palette
+        const dOf = (id: number) => colorDistance(bg, palette[('q' + GAME.equipById[id].quality) as keyof typeof palette])
+        const dPrefer = dOf(preferred.equipId), dPlain = dOf(plainTop.equipId)
+        if (Math.abs(dPrefer - dPlain) >= 12 && Math.min(dPrefer, dPlain) <= 38) {
+          decided = dPrefer < dPlain ? preferred : plainTop
+          decidedReason = '底色品阶清晰，已自动确认'
+        }
+      }
     }
     const candidates = decided ? (decided === preferred ? ranked : plain) : tierOnly ? plain : ranked
     const top = decided ?? (tierOnly ? plainTop : preferred)
@@ -327,7 +391,7 @@ export function recognizeGrid(img: RgbImage, grid: Grid, samples: OcrSample[] = 
     const taught = learned.has(top.equipId) && top.distance < 30
     cell.confirmed = taught || !!decided || (top.distance < 30 && margin >= (sameName ? 3.5 : 3) && !byColor)
     cell.reason = taught ? '按你教过的样子匹配'
-      : decided ? '共鸣值与品阶一致，已自动确认'
+      : decided ? decidedReason
       : byColor ? '品阶由底色区分，请核对' : cell.confirmed ? '原生图案匹配' : sameName ? '同件多阶图案接近，请核对品阶' : '图案相近或偏差较大，请核对'
   }
   for (const cell of cells.filter((c) => c.kind === 'piece')) {

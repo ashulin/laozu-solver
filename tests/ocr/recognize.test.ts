@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { GAME, isPlayableEquip } from '@/core/data'
 import library from '@/core/data/raw/ocr-library.json'
-import { MODEL } from '@/core/ocr/model'
+import { decodeTemplate, MODEL } from '@/core/ocr/model'
+import { ELEMENT_NAME } from '@/core/types'
 import { anchoredPiece, occupiedCells, validGrid } from '@/core/ocr/geometry'
 import { needsReview, rebuildCoverage, reviewRecognition, setExcluded } from '@/core/ocr/draft'
 import { detectAwaken } from '@/core/ocr/awaken'
 import glyphs from '@/core/data/raw/awaken-glyphs.json'
-import { matchArt, rankCandidates, recognizeGrid, resonanceOf, type CellAnalysis, type RecognitionCell } from '@/core/ocr/recognize'
+import { matchArt, maskedBackground, rankCandidates, recognizeGrid, resonanceOf, type CellAnalysis, type RecognitionCell } from '@/core/ocr/recognize'
 import { refreshConflicts, spatialConflicts } from '@/core/ocr/conflicts'
 import type { ElderConfig } from '@/core/types'
 import { FIXTURES_AVAILABLE, loadFixture, manifest } from './fixtures'
@@ -59,6 +60,37 @@ describe('原生图库与像素识别', () => {
     expect(occupiedCells(eq.id, 2, 1)).toEqual([15, 22, 28, 29])
     expect(occupiedCells(eq.id, 0, 0)).toBeNull()
     expect(anchoredPiece(-1, 0, 0)).toBeNull()
+  })
+  it('形状掩码反采底色：避开图案与角标，返回纯底色', () => {
+    const eq = GAME.equips.find((e) => e.elderId === undefined && GAME.shapeById[e.shapeId].cellCount === 4
+      && GAME.equips.some((n) => n.name === e.name && n.tier === e.tier + 1))!
+    const next = GAME.equips.find((n) => n.name === eq.name && n.tier === eq.tier + 1)!
+    const tpl = library.templates.find((t) => t.id === eq.id)!
+    const grid = { ox: 0, oy: 0, pw: 100, ph: 100 }
+    const bg = MODEL.palette.q2
+    const art: [number, number, number] = [10, 10, 10]
+    // 占格内模板采样点位置涂成图案色（含同件高阶模板的并集），其余全是底色
+    const both = [tpl.points, library.templates.find((t) => t.id === next.id)!.points]
+    const img = {
+      w: 700, h: 600,
+      px: (x: number, y: number): [number, number, number] => {
+        const c = x / 100, r = y / 100
+        for (const points of both) for (let i = 0; i < points.length; i += 5) {
+          const tx = points[i] / 1000, ty = points[i + 1] / 1000
+          if (Math.floor(tx) === Math.floor(c) && Math.floor(ty) === Math.floor(r)
+            && Math.abs((tx % 1) - (c % 1)) < 0.05 && Math.abs((ty % 1) - (r % 1)) < 0.05) return art
+        }
+        return bg
+      },
+    }
+    const got = maskedBackground(img, grid, 0, 0, [eq.id, next.id])
+    expect(got).not.toBeNull()
+    // 掩码外的采样点全部落在底色上：与 q2 的距离远小于与 q4 的距离
+    const dist = (a: number[], b: number[]) => Math.sqrt(a.reduce((s, v, i) => s + (v - b[i]) ** 2, 0))
+    expect(dist(got!, bg)).toBeLessThan(8)
+    expect(dist(got!, MODEL.palette.q4)).toBeGreaterThan(40)
+    // 未知法宝没有模板时返回 null，不误采
+    expect(maskedBackground(img, grid, 0, 0, [-1])).toBeNull()
   })
 })
 
@@ -122,6 +154,65 @@ describe.skipIf(!FIXTURES_AVAILABLE)('原生图库识别真实截图（人工网
       expect(detectAwaken({ w: 700, h: 600, px: () => color }, { ox: 0, oy: 0, pw: 100, ph: 100 }, [0], 5)).toBeNull()
     }
   })
+  it('同件多阶图案打平且边带污染时，掩码底色裁决选对阶并自动确认', () => {
+    // 玄黄令 T1/T2 是全库图案最相似的同名对（平均色差 13.8）
+    const low = GAME.equips.find((e) => e.name === '玄黄令' && e.tier === 1)!
+    const high = GAME.equips.find((e) => e.name === '玄黄令' && e.tier === 2)!
+    const points = (id: number) => library.templates.find((t) => t.id === id)!.points
+    const glyph = decodeTemplate(MODEL.templates.element[ELEMENT_NAME[low.element]])
+    const grid = { ox: 0, oy: 0, pw: 100, ph: 100 }
+    const layer: { x: number, y: number, c: [number, number, number] }[] = []
+    /** 放一件法宝：底色 + 边带污染（模拟阴影让 analyze 边带中位数测错品阶）+ 图案 + 元素标；共鸣数字不画 */
+    const place = (id: number, row: number, col: number, wrongQuality: number) => {
+      const eq = GAME.equipById[id]
+      const q = MODEL.palette[('q' + eq.quality) as 'q1']
+      const wrong = MODEL.palette[('q' + wrongQuality) as 'q1']
+      for (const [dr, dc] of GAME.shapeById[eq.shapeId].cells) {
+        for (let y = 0; y < 100; y++) for (let x = 0; x < 100; x++) {
+          // 顶/左/右三条边带（bgInset=7px 采样线所在）涂错误品阶色，模拟真实截图的边带污染
+          const c = y >= 5 && y <= 9 || x >= 5 && x <= 9 || x >= 91 && x <= 95 ? wrong : q
+          layer.push({ x: (col + dc) * 100 + x, y: (row + dr) * 100 + y, c })
+        }
+      }
+      for (let i = 0; i < points(id).length; i += 5) {
+        layer.push({
+          x: Math.round((col + points(id)[i] / 1000) * 100),
+          y: Math.round((row + points(id)[i + 1] / 1000) * 100),
+          c: [points(id)[i + 2], points(id)[i + 3], points(id)[i + 4]],
+        })
+      }
+      // 元素标：锚点格左上按字形位图涂暗色（与 samplePatch 的 (i+0.5) 采样中心对齐）
+      const geo = MODEL.geometry
+      for (let j = 0; j < 18; j++) for (let i = 0; i < 18; i++) {
+        const fx = geo.elementBox[0] + (i + 0.5) / 18 * (geo.elementBox[2] - geo.elementBox[0])
+        const fy = geo.elementBox[1] + (j + 0.5) / 18 * (geo.elementBox[3] - geo.elementBox[1])
+        // 模板 +1 位是亮笔画、-1 位是深色圆底
+        layer.push({ x: Math.round((col + fx) * 100), y: Math.round((row + fy) * 100), c: glyph[j * 18 + i] > 0 ? [235, 235, 235] : [40, 40, 40] })
+      }
+    }
+    place(high.id, 0, 0, 1) // T2 图案 + q2 底色，边带污染成 q1 → 品阶惩罚会把首选偏到 T1
+    place(low.id, 2, 2, 2)  // T1 图案 + q1 底色，边带污染成 q2 → 反向对照
+    const pix = new Map<string, [number, number, number]>()
+    for (const p of layer) pix.set(p.x + ',' + p.y, p.c)
+    const img = {
+      w: 700, h: 600,
+      px: (x: number, y: number): [number, number, number] => pix.get(x + ',' + y) ?? MODEL.palette.empty,
+    }
+    const result = recognizeGrid(img, grid)
+    // 高阶格：图案打平 + 底色测错 + 无共鸣数字 → 掩码底色裁决选回 T2
+    const cellHigh = result.cells[0]
+    expect(cellHigh.kind).toBe('piece')
+    expect(cellHigh.equipId).toBe(high.id)
+    expect(cellHigh.confirmed).toBe(true)
+    expect(cellHigh.reason).toBe('底色品阶清晰，已自动确认')
+    // 对照格：反向污染也选回 T1
+    const anchor = GAME.shapeById[low.shapeId].cells[0]
+    const cellLow = result.cells[(2 + anchor[0]) * 7 + (2 + anchor[1])]
+    expect(cellLow.kind).toBe('piece')
+    expect(cellLow.equipId).toBe(low.id)
+    expect(cellLow.confirmed).toBe(true)
+  })
+
 })
 
 describe('元素、形态与共鸣值证据', () => {

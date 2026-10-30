@@ -225,6 +225,36 @@ describe('截图识别页', () => {
     await w.find('[data-cell="6"]').trigger('click')
     expect(w.find('.editor legend').text()).toContain('第 7 列')
   })
+  it('拖拽框选背包：生成网格并按新网格识别；框内平移与滚轮缩放实时调整', async () => {
+    // 先让自动定位失败（无网格），拖动才是「框选」而不是「平移」
+    vi.mocked(runRecognition).mockResolvedValueOnce({ type: 'done', grid, result: null })
+    const w = create(); await upload(w)
+    const canvas = w.find('canvas[aria-label="截图网格预览"]')
+    vi.spyOn(canvas.element, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 700, height: 600 } as DOMRect)
+    const opts = (clientX: number, clientY: number) => ({ clientX, clientY, pointerId: 1 })
+    // 从 (60,80) 拖到 (480,560)：7×6 格 → pw=60 ph=80
+    await canvas.trigger('pointerdown', opts(60, 80))
+    await canvas.trigger('pointermove', opts(480, 560))
+    await canvas.trigger('pointerup', opts(480, 560))
+    // 按新网格重新识别（runRecognition 收到手动网格）
+    const call = vi.mocked(runRecognition).mock.calls.at(-1)!
+    expect(call[1]).toMatchObject({ ox: 60, oy: 80, pw: 60, ph: 80 })
+    await flushPromises()
+    // 拖拽后的自动识别会把网格重置为识别结果（mock 的 0,0,100,100，恰好占满全图）。
+    // 先滚轮缩小腾出平移空间，再验证框内拖动平移。
+    await canvas.trigger('wheel', { clientX: 300, clientY: 300, deltaY: 100 })
+    const vm = w.vm as unknown as { grid: { ox: number; oy: number; pw: number } }
+    const afterZoom = { ...vm.grid }
+    expect(afterZoom.pw).toBeCloseTo(100 / 1.12, 0)
+    await canvas.trigger('pointerdown', opts(300, 300))
+    await canvas.trigger('pointermove', opts(330, 310))
+    await canvas.trigger('pointerup', opts(330, 310))
+    // 平移量按图片坐标计算：缩小后预览裁剪区域变小，30px 屏幕位移 ≈ 26.8 图片像素
+    expect(vm.grid.ox - afterZoom.ox).toBeGreaterThan(25)
+    expect(vm.grid.ox - afterZoom.ox).toBeLessThan(31)
+    expect(vm.grid.oy - afterZoom.oy).toBeGreaterThan(8)
+    expect(vm.grid.oy - afterZoom.oy).toBeLessThan(11)
+  })
   it('点重叠格提供所有法宝选项，选择后突出整件且不可确认冲突', async () => {
     const cells = draft()
     for (const [index, id] of [[25, 140108], [33, 110103], [34, 140103]]) Object.assign(cells[index], { kind: 'piece', equipId: id, awaken: 0, confirmed: true })
@@ -242,7 +272,9 @@ describe('截图识别页', () => {
     expect(w.find('.workspace').attributes('data-mobile-view')).toBe('original')
     const canvas = w.find('canvas[aria-label="截图网格预览"]')
     vi.spyOn(canvas.element, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 700, height: 600 } as DOMRect)
-    await canvas.trigger('click', { clientX: 450, clientY: 550 })
+    // 拖拽式框选下的「点击格子」= 原地按下再松开
+    await canvas.trigger('pointerdown', { clientX: 450, clientY: 550, pointerId: 1 })
+    await canvas.trigger('pointerup', { clientX: 450, clientY: 550, pointerId: 1 })
     expect(w.find('.overlap-choices').text()).toContain('4,5')
     expect(w.find('.overlap-choices').text()).toContain('5,6')
     await w.findAll('.overlap-choices button').find((b) => b.text().startsWith('4,5'))!.trigger('click')

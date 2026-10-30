@@ -56,13 +56,12 @@ const showFull = ref(false)
 const previewBounds = computed(() => {
   const img = image.value
   const g = grid.value
-  if (img && g && !framing.value && !showFull.value && validGrid({ w: img.width, h: img.height }, g)) {
+  if (img && g && !showFull.value && validGrid({ w: img.width, h: img.height }, g)) {
     const x = Math.max(0, Math.floor(g.ox)), y = Math.max(0, Math.floor(g.oy))
     return { x, y, w: Math.min(img.width - x, Math.round(g.pw * 7)), h: Math.min(img.height - y, Math.round(g.ph * 6)) }
   }
   return { x: 0, y: 0, w: img?.width ?? 1, h: img?.height ?? 1 }
 })
-const corner = ref<{ x: number; y: number } | null>(null)
 let controller: AbortController | null = null
 let revision = 0
 const active = computed(() => cells.value[activeIndex.value])
@@ -119,7 +118,7 @@ async function load(file?: File) {
   cancel()
   const token = revision
   busy.value = true; error.value = ''; cells.value = []; grid.value = null; image.value = null
-  imported.value = false; framing.value = false; corner.value = null
+  imported.value = false; framing.value = false
   try {
     const decoded = await decodeScreenshot(file)
     if (token !== revision) return
@@ -175,13 +174,20 @@ async function recognize(manual = false) {
   controller = run
   const token = ++revision
   busy.value = true; error.value = ''; cells.value = []; imported.value = false
-  framing.value = false; corner.value = null
+  framing.value = false
   try {
     const output = await runRecognition(image.value, manual && grid.value ? { ...grid.value } : undefined, run.signal, (s) => { status.value = s }, samples.value)
     if (token !== revision) return
+    if (!output.result) {
+      // 定位失败时不采用兜底网格（它会盖住整张图，让拖动变成平移而无法重新框选）
+      grid.value = null
+      mobileView.value = 'original'
+      error.value = '未能可靠定位背包，请在截图上拖动框选背包区域'
+      return
+    }
     grid.value = output.grid
-    if (!output.result) { mobileView.value = 'original'; error.value = '未能可靠定位背包，请在截图上手动框选后识别'; return }
     cells.value = output.result.cells
+    gridAdjusted.value = false
     overlapCell.value = null
     mobileView.value = 'recognized'
     skipPending.value = false; quickSkipPrompt.value = false
@@ -276,23 +282,153 @@ function toggleExcluded() {
   // 已排除的法宝在「全部」里仍可见（灰色虚线），不再单独分组
   listMode.value = active.value?.excluded ? 'all' : pending(active.value) ? 'pending' : 'ready'
 }
-function clickPreview(event: MouseEvent) {
-  if (!canvas.value || !image.value || busy.value) return
-  const bounds = canvas.value.getBoundingClientRect()
+/** 预览图手势（移植自觉醒版）：拖动框选背包；框内拖动平移；拖四角缩放；双指开合 / 滚轮缩放。 */
+type Pt = { x: number; y: number }
+interface DragState { mode: 'box' | 'move' | 'resize'; start: Pt | null; corner: number; anchor: Pt | null }
+const pointers = new Map<number, Pt>()
+let pinchPrev: { dist: number; mid: Pt } | null = null
+let drag: DragState | null = null
+const dragRect = ref<{ x: number; y: number; w: number; h: number } | null>(null)
+let downAt: Pt | null = null
+
+function toImgCoords(e: { clientX: number; clientY: number }): Pt {
+  const rc = canvas.value!.getBoundingClientRect()
   const area = previewBounds.value
-  const x = area.x + (event.clientX - bounds.left) * area.w / bounds.width
-  const y = area.y + (event.clientY - bounds.top) * area.h / bounds.height
-  if (framing.value) {
-    if (!corner.value) { corner.value = { x, y }; draw(); return }
-    const first = corner.value
-    const next = { ox: Math.min(first.x, x), oy: Math.min(first.y, y), pw: Math.abs(x - first.x) / 7, ph: Math.abs(y - first.y) / 6 }
-    if (!validGrid({ w: image.value.width, h: image.value.height }, next)) { error.value = '框选区域过小或越界，请重新选择两个角'; corner.value = null; return }
-    grid.value = next; corner.value = null; framing.value = false
-    void recognize(true)
-  } else if (grid.value && cells.value.length) {
-    const r = Math.floor((y - grid.value.oy) / grid.value.ph), c = Math.floor((x - grid.value.ox) / grid.value.pw)
-    if (r >= 0 && r < 6 && c >= 0 && c < 7) chooseCell(r * 7 + c)
+  return { x: area.x + (e.clientX - rc.left) / rc.width * area.w, y: area.y + (e.clientY - rc.top) / rc.height * area.h }
+}
+function gridCorners(g: Grid): Pt[] {
+  return [
+    { x: g.ox, y: g.oy },
+    { x: g.ox + 7 * g.pw, y: g.oy },
+    { x: g.ox, y: g.oy + 6 * g.ph },
+    { x: g.ox + 7 * g.pw, y: g.oy + 6 * g.ph },
+  ]
+}
+/** 26 屏幕像素的角手柄抓取半径（换算成图片坐标） */
+function hitCorner(p: Pt): number {
+  if (!grid.value || !canvas.value) return -1
+  const rc = canvas.value.getBoundingClientRect()
+  const area = previewBounds.value
+  const radius = 26 / rc.width * area.w
+  return gridCorners(grid.value).findIndex((c) => Math.hypot(p.x - c.x, p.y - c.y) <= radius)
+}
+function pointInGrid(p: Pt): boolean {
+  const g = grid.value
+  if (!g) return false
+  const m = Math.min(g.pw, g.ph) * 0.1
+  return p.x >= g.ox - m && p.x <= g.ox + 7 * g.pw + m && p.y >= g.oy - m && p.y <= g.oy + 6 * g.ph + m
+}
+/** 以 m 为锚点缩放网格（光标 / 双指中心不动） */
+function scaleGridAt(m: Pt, s: number) {
+  const g = grid.value
+  if (!g || !image.value) return
+  const W = image.value.width, H = image.value.height
+  const pw = Math.min(W, Math.max(20, g.pw * s)), ph = Math.min(H, Math.max(20, g.ph * s))
+  const u = (m.x - g.ox) / g.pw, v = (m.y - g.oy) / g.ph
+  const next = { ox: m.x - u * pw, oy: m.y - v * ph, pw, ph }
+  if (!validGrid({ w: W, h: H }, next)) return
+  grid.value = next
+  gridAdjusted.value = true
+  draw()
+}
+/** 网格被手动平移 / 缩放过：结果仍是旧网格的，提示需重新识别 */
+const gridAdjusted = ref(false)
+
+function onPointerDown(e: PointerEvent) {
+  if (!canvas.value || !image.value || busy.value) return
+  e.preventDefault()
+  const p = toImgCoords(e)
+  try { canvas.value.setPointerCapture(e.pointerId) } catch { /* 某些环境不支持 */ }
+  pointers.set(e.pointerId, p)
+  if (pointers.size === 2) { pinchPrev = null; drag = null; dragRect.value = null; framing.value = true; draw(); return }
+  downAt = p
+  framing.value = true
+  const hc = grid.value ? hitCorner(p) : -1
+  if (hc >= 0) drag = { mode: 'resize', start: null, corner: hc, anchor: gridCorners(grid.value!)[3 - hc] }
+  else if (grid.value && pointInGrid(p)) drag = { mode: 'move', start: p, corner: -1, anchor: null }
+  else { drag = { mode: 'box', start: p, corner: -1, anchor: null }; dragRect.value = null }
+}
+function onPointerMove(e: PointerEvent) {
+  if (!pointers.has(e.pointerId) || !image.value) return
+  const p = toImgCoords(e)
+  const prev = pointers.get(e.pointerId)!
+  pointers.set(e.pointerId, p)
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()]
+    const dist = Math.hypot(a.x - b.x, a.y - b.y)
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+    if (pinchPrev && pinchPrev.dist > 0 && dist > 0) scaleGridAt(mid, dist / pinchPrev.dist)
+    pinchPrev = { dist, mid }
+    return
   }
+  if (!drag) return
+  if (drag.mode === 'box' && drag.start) {
+    dragRect.value = {
+      x: Math.min(drag.start.x, p.x), y: Math.min(drag.start.y, p.y),
+      w: Math.abs(p.x - drag.start.x), h: Math.abs(p.y - drag.start.y),
+    }
+    draw()
+  } else if (drag.mode === 'move' && grid.value) {
+    const next = { ...grid.value, ox: grid.value.ox + (p.x - prev.x), oy: grid.value.oy + (p.y - prev.y) }
+    if (validGrid({ w: image.value.width, h: image.value.height }, next)) { grid.value = next; gridAdjusted.value = true; draw() }
+  } else if (drag.mode === 'resize' && grid.value && drag.anchor) {
+    // 对角锚定，被拖的角跟随指针；保证最小格 20px
+    const a = drag.anchor
+    let x0 = Math.max(0, Math.min(a.x, p.x)), x1 = Math.min(image.value.width, Math.max(a.x, p.x))
+    let y0 = Math.max(0, Math.min(a.y, p.y)), y1 = Math.min(image.value.height, Math.max(a.y, p.y))
+    if (x1 - x0 < 7 * 20) { if (p.x > a.x) x1 = x0 + 7 * 20; else x0 = x1 - 7 * 20 }
+    if (y1 - y0 < 6 * 20) { if (p.y > a.y) y1 = y0 + 6 * 20; else y0 = y1 - 6 * 20 }
+    const next = { ox: x0, oy: y0, pw: (x1 - x0) / 7, ph: (y1 - y0) / 6 }
+    if (validGrid({ w: image.value.width, h: image.value.height }, next)) { grid.value = next; gridAdjusted.value = true; draw() }
+  }
+}
+function onPointerUp(e: PointerEvent) {
+  const wasDrag = drag
+  const start = downAt
+  pointers.delete(e.pointerId)
+  if (pointers.size < 2) pinchPrev = null
+  if (!pointers.size) { framing.value = false; downAt = null }
+  else if (pointers.size === 1 && grid.value) drag = { mode: 'move', start: null, corner: -1, anchor: null }
+  if (wasDrag?.mode === 'box') {
+    const r = dragRect.value
+    dragRect.value = null
+    drag = null
+    if (r && r.w > 40 && r.h > 40 && image.value) {
+      const next = { ox: r.x, oy: r.y, pw: r.w / 7, ph: r.h / 6 }
+      if (!validGrid({ w: image.value.width, h: image.value.height }, next)) {
+        error.value = '框选区域过小或越界；应框住 6 行 × 7 列背包（不含上方待放置法宝）'
+      } else {
+        grid.value = next
+        error.value = ''
+        void recognize(true)
+        return
+      }
+    }
+    draw()
+    return
+  }
+  drag = null
+  // 没有拖动距离的按下再松开 = 点击格子核对
+  if (start && grid.value && cells.value.length) {
+    const p = toImgCoords(e)
+    if (Math.hypot(p.x - start.x, p.y - start.y) < 6) {
+      const r = Math.floor((p.y - grid.value.oy) / grid.value.ph), c = Math.floor((p.x - grid.value.ox) / grid.value.pw)
+      if (r >= 0 && r < 6 && c >= 0 && c < 7) chooseCell(r * 7 + c)
+    }
+  }
+  draw()
+}
+function onPointerCancel(e: PointerEvent) {
+  pointers.delete(e.pointerId)
+  pinchPrev = null
+  drag = null; dragRect.value = null; downAt = null
+  if (!pointers.size) framing.value = false
+  draw()
+}
+function onWheel(e: WheelEvent) {
+  if (!grid.value || !image.value || busy.value) return
+  e.preventDefault()
+  scaleGridAt(toImgCoords(e), e.deltaY < 0 ? 1.12 : 1 / 1.12)
 }
 function changeCell(value: string) {
   const cell = active.value
@@ -361,9 +497,19 @@ function draw() {
       }
     }
   }
-  if (corner.value) {
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath()
-    ctx.arc(corner.value.x, corner.value.y, 10, 0, Math.PI * 2); ctx.stroke()
+  if (dragRect.value) {
+    const r = dragRect.value
+    ctx.strokeStyle = '#4da3ff'; ctx.lineWidth = Math.max(2, (grid.value?.pw ?? 100) / 40)
+    ctx.setLineDash([10, 7]); ctx.strokeRect(r.x, r.y, r.w, r.h); ctx.setLineDash([])
+  }
+  // 四角缩放手柄（拖拽对角锚定；识别中不显示避免干扰）
+  if (grid.value && !busy.value) {
+    const size = Math.max(6, grid.value.pw * 0.09)
+    ctx.fillStyle = '#4da3ff'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2
+    for (const c of gridCorners(grid.value)) {
+      ctx.fillRect(c.x - size / 2, c.y - size / 2, size, size)
+      ctx.strokeRect(c.x - size / 2, c.y - size / 2, size, size)
+    }
   }
 }
 function importBag() {
@@ -403,11 +549,11 @@ onBeforeUnmount(() => { cancel(); window.removeEventListener('paste', paste) })
       <section class="panel preview">
         <div class="row"><h3>原始背包</h3><span class="muted small">{{ filename }}</span></div>
         <div class="row">
-          <button :disabled="busy" @click="recognize()">自动重新识别</button>
+          <button :disabled="busy" @click="gridAdjusted = false; recognize()">自动重新识别</button>
           <button :disabled="framing" @click="showFull = !showFull">{{ showFull ? '只看背包' : '完整截图' }}</button>
-          <button :disabled="busy" @click="framing = !framing; corner = null">{{ framing ? '取消框选' : '手动框选网格' }}</button>
         </div>
-        <p class="small" :class="framing ? 'warn' : 'muted'">{{ framing ? (corner ? '再点背包网格右下角（不含外框）' : '先点背包网格左上角（不含外框）') : '应仅框住 6 行 × 7 列背包，不含上方待放置法宝。点击格子可校正。' }}</p>
+        <p v-if="gridAdjusted" class="warn small">网格已手动调整，点「自动重新识别」按新网格重新识别。</p>
+        <p class="small muted">在预览图上拖动即可框选背包（6 行 × 7 列，不含上方待放置法宝）；框内拖动平移、拖四角缩放、双指开合或滚轮缩放。点击格子可核对。</p>
         <details v-if="grid">
           <summary>精调网格坐标</summary>
           <fieldset :disabled="busy" class="grid-fields">
@@ -415,7 +561,11 @@ onBeforeUnmount(() => { cancel(); window.removeEventListener('paste', paste) })
             <button @click="recognize(true)">按此网格识别</button>
           </fieldset>
         </details>
-        <div class="canvas-scroll"><canvas ref="canvas" aria-label="截图网格预览" @click="clickPreview" /></div>
+        <div class="canvas-scroll"><canvas
+          ref="canvas" aria-label="截图网格预览"
+          @pointerdown="onPointerDown" @pointermove="onPointerMove" @pointerup="onPointerUp"
+          @pointercancel="onPointerCancel" @wheel="onWheel"
+        /></div>
       </section>
       <section class="panel review">
         <h3>识别背包 <span class="muted small">· 点击法宝核对</span></h3>
@@ -533,7 +683,7 @@ h2 { font-size: 20px; } h3 { font-size: 15px; }
 .workspace { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
 .preview, .review { min-width: 0; }.preview .row { margin-bottom: 8px; }.preview .row span { overflow-wrap: anywhere; }
 .mobile-switch { display: none; }.review-editor { grid-column: 1 / -1; min-width: 0; }
-.canvas-scroll { max-height: 78vh; overflow: auto; margin-top: 10px; padding: 6px; border: 1px solid var(--line); background: var(--outline); border-radius: 14px; }canvas { display: block; max-width: 100%; height: auto; }.canvas-scroll canvas { width: 100%; cursor: crosshair; }
+.canvas-scroll { max-height: 78vh; overflow: auto; margin-top: 10px; padding: 6px; border: 1px solid var(--line); background: var(--outline); border-radius: 14px; }canvas { display: block; max-width: 100%; height: auto; touch-action: none; }.canvas-scroll canvas { width: 100%; cursor: crosshair; }
 .board-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; color: var(--text-dim); }
 .overlap-choices { padding: 12px; border: 1px solid var(--warn); border-radius: 8px; margin-bottom: 12px; }.overlap-choices button { text-align: left; }
 .current-label { margin-bottom: 12px; }.current-label b { font-size: 15px; }.editor-heading { justify-content: space-between; }.editor-heading h3 { margin-right: auto; }
